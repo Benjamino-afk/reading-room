@@ -3,12 +3,21 @@
 The image is built automatically by GitHub and stored online. The NAS just
 downloads and runs it. Four steps.
 
-## 1. Make the image downloadable (one time)
-Go to https://github.com/Benjamino-afk/reading-room → **Packages** (right side) →
-click **reading-room** → **Package settings** → **Change visibility** → **Public**.
+## 1. Let the NAS log in to GitHub (one time only)
+The image is private, so the NAS needs a read-only token to download it.
 
-(That's the easy way. If you'd rather keep it private, tell me and I'll give you
-the Portainer login steps instead.)
+**a. Make a token:** open this link (scope is pre-ticked) →
+https://github.com/settings/tokens/new?scopes=read:packages&description=NAS+GHCR
+→ **Generate token** → copy it. (Save it in `Documents\AIwork\Secrets` so you don't lose it.)
+
+**b. Add it to Portainer:** Portainer → **Registries** → **Add registry** → **Custom** →
+- Name: `ghcr`
+- Registry URL: `ghcr.io`
+- Username: `Benjamino-afk`
+- Password: the token from step a
+→ **Add registry**.
+
+You only ever do this once.
 
 ## 2. Add the stack in Portainer
 Portainer → **Stacks** → **Add stack** → name it `reading-room` → paste this in the
