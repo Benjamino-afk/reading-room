@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family:'Hanken Grotesk',sans-serif; }
+  #app { height: 100vh; display: flex; flex-direction: column; }
+  button { font: inherit; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,110,95,0.28); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+  .empty { font-family:'Hanken Grotesk',sans-serif; color:var(--muted,#8b8275); font-size:14px; padding:40px; text-align:center; }
+  input.url-input { flex:1; border:none; outline:none; background:transparent; font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2c2722; }
+  input.url-input::placeholder { color:#b09e82; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ---- helpers ---------------------------------------------------------------
+const $ = (sel, root=document) => root.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => (
+  {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+// serialize a JS style object (camelCase / --custom-props) to an inline string
+function ss(obj) {
+  return Object.entries(obj).map(([k, v]) => {
+    const key = k.startsWith("--") ? k : k.replace(/[A-Z]/g, m => "-" + m.toLowerCase());
+    return `${key}:${v}`;
+  }).join(";");
+}
+
+function fmtTime(ts) {
+  const d = Math.max(0, Date.now() / 1000 - ts);
+  if (d < 60) return "now";
+  if (d < 3600) return Math.floor(d / 60) + "m";
+  if (d < 86400) return Math.floor(d / 3600) + "h";
+  if (d < 604800) return Math.floor(d / 86400) + "d";
+  return new Date(ts * 1000).toLocaleDateString();
+}
+
+function metaOf(a) {
+  if (a.words > 0) return a.words.toLocaleString() + " words";
+  if (a.type === "comic") return (a.panels || 0) + " panels";
+  return "photo";
+}
+
+const api = {
+  feeds: () => fetch("/api/feeds").then(r => r.json()),
+  articles: () => fetch("/api/articles?feed=all").then(r => r.json()),
+  patch: (id, body) => fetch(`/api/articles/${id}`, {
+    method: "PATCH", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)}).then(r => r.json()),
+  markAll: feed => fetch(`/api/articles/mark-all-read?feed=${feed}`, {method: "POST"}),
+  addFeed: (url, fullText) => fetch("/api/feeds", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({url, fullText})}),
+  delFeed: id => fetch(`/api/feeds/${id}`, {method: "DELETE"}),
+  refresh: () => fetch("/api/refresh", {method: "POST"}),
+  importOpml: xml => fetch("/api/opml", {
+    method: "POST", headers: {"Content-Type": "text/plain"}, body: xml}),
+};
+
+// ---- state -----------------------------------------------------------------
+const _qLayout = new URLSearchParams(location.search).get("layout");
+const S = {
+  layout: (["home","office","board"].includes(_qLayout) ? _qLayout : null)
+    || localStorage.getItem("rr-layout") || "home",
+  theme: localStorage.getItem("rr-theme") || "light",
+  accent: localStorage.getItem("rr-accent") || "terracotta",
+  filter: "all",
+  view: "reader",        // reader | manager | story
+  storyId: null,
+  selected: null,
+  feeds: [],
+  articles: [],
+  fullText: true,
+  busy: false,
+};
+
+async function load() {
+  if (window.__RR_DATA__) {            // preloaded snapshot (offline render)
+    S.feeds = window.__RR_DATA__.feeds;
+    S.articles = window.__RR_DATA__.articles;
+    render();
+    return;
+  }
+  const [feeds, articles] = await Promise.all([api.feeds(), api.articles()]);
+  S.feeds = feeds;
+  S.articles = articles;
+  render();
+}
+
+// ---- theme tokens (ported from the design handoff) -------------------------
+function tokens() {
+  const accentLight = {terracotta:"#b5532e", sage:"#5f7a55", indigo:"#4f5b9a"}[S.accent] || "#b5532e";
+  const accentDark  = {terracotta:"#db7d52", sage:"#92ab84", indigo:"#8b97d8"}[S.accent] || "#db7d52";
+  const dark = S.theme === "dark";
+  const paper = dark ? {
+    "--paper":"#1b1814","--card":"#241f1a","--card2":"#2c261f","--ink":"#ece3d4",
+    "--muted":"#9c917f","--line":"#352f28","--soft":"#2c2620","--accent":accentDark,
+  } : {
+    "--paper":"#f7f2e8","--card":"#fffdf8","--card2":"#fbf6ec","--ink":"#2c2722",
+    "--muted":"#8b8275","--line":"#e8e1d2","--soft":"#f2ecdf","--accent":accentLight,
+  };
+  const office = dark ? {
+    "--o-bg":"#1b1a19","--o-pane":"#252423","--o-line":"#3b3a39","--o-ink":"#f3f2f1",
+    "--o-sub":"#c8c6c4","--o-sel":"#2b3a4f","--o-selbar":"#479ef5","--o-blue":"#479ef5","--o-hover":"#323130",
+  } : {
+    "--o-bg":"#faf9f8","--o-pane":"#ffffff","--o-line":"#edebe9","--o-ink":"#201f1e",
+    "--o-sub":"#605e5c","--o-sel":"#eaf1fb","--o-selbar":"#0f6cbd","--o-blue":"#0f6cbd","--o-hover":"#f3f2f1",
+  };
+  return {paper, office, dark};
+}
+
+function feedRows() {
+  const total = S.feeds.reduce((n, f) => n + f.unread, 0);
+  return [{id: "all", name: "All Stories", color: "#a89e8d", unread: total}, ...S.feeds];
+}
+
+function visibleArticles() {
+  return S.articles.filter(a => S.filter === "all" || String(a.feedId) === String(S.filter));
+}
+
+function filterName() {
+  const f = feedRows().find(f => String(f.id) === String(S.filter));
+  return f ? f.name : "All Stories";
+}
+
+// ---- header ----------------------------------------------------------------
+function headerHTML() {
+  const {dark} = tokens();
+  const segBase = "padding:7px 15px;border:none;border-radius:8px;font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;min-width:66px";
+  const seg = id => S.layout === id
+    ? `${segBase};background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,0.16)`
+    : `${segBase};background:transparent;color:var(--muted)`;
+  return `
+  <div style="flex:0 0 auto;height:62px;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--card);border-bottom:1px solid var(--line);">
+    <div style="display:flex;align-items:center;gap:11px;">
+      <div style="width:27px;height:27px;border-radius:7px;background:var(--accent);box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);"></div>
+      <span style="font-family:'Newsreader',serif;font-size:22px;font-weight:600;color:var(--ink);letter-spacing:-0.01em;">Reading&nbsp;Room</span>
+    </div>
+    <div style="margin:0 auto;display:flex;gap:4px;padding:4px;background:var(--soft);border-radius:11px;">
+      <button data-act="layout" data-layout="home" style="${seg("home")}">Home</button>
+      <button data-act="layout" data-layout="office" style="${seg("office")}">Office</button>
+      <button data-act="layout" data-layout="board" style="${seg("board")}">Board</button>
+    </div>
+    <button data-act="refresh" title="Poll feeds now" style="padding:7px 12px;border:1px solid var(--line);background:var(--card);border-radius:9px;color:var(--muted);font-size:13px;cursor:pointer;">${S.busy ? "Syncing…" : "↻ Sync"}</button>
+    <button data-act="theme" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--line);background:var(--card);border-radius:9px;color:var(--muted);font-size:13px;cursor:pointer;"><span style="font-size:14px;">${dark ? "☾" : "☀"}</span>${dark ? "Dark" : "Light"}</button>
+    <button data-act="manager" style="padding:8px 15px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Add feed</button>
+  </div>`;
+}
+
+// ---- HOME ------------------------------------------------------------------
+function homeHTML() {
+  const rows = feedRows();
+  const feedRowsHTML = rows.map(f => {
+    const active = String(S.filter) === String(f.id);
+    const rowStyle = "display:flex;align-items:center;gap:10px;width:100%;padding:8px 9px;border:none;border-radius:9px;cursor:pointer;font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;text-align:left;margin-bottom:2px;"
+      + (active ? "background:var(--soft);color:var(--ink);font-weight:600;" : "background:transparent;color:var(--muted);font-weight:500;");
+    return `<button data-act="filter" data-feed="${esc(f.id)}" style="${rowStyle}">
+      <span style="width:9px;height:9px;border-radius:50%;background:${esc(f.color)};flex:0 0 auto;"></span>
+      <span style="flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.name)}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:0.8;">${f.unread}</span>
+    </button>`;
+  }).join("");
+
+  const arts = visibleArticles();
+  const cards = arts.map(a => {
+    const dim = a.read ? 0.58 : 1;
+    let media = "";
+    if (a.type === "comic") {
+      const imgs = (a.images || []).slice(0, 4);
+      if (imgs.length) {
+        media = `<div style="display:flex;gap:2px;padding:2px;background:var(--line);">${
+          imgs.map(s => `<div style="flex:1;height:120px;background:#000 center/cover no-repeat url('${esc(s)}');"></div>`).join("")}</div>`;
+      } else {
+        const panel = `<div style="flex:1;height:120px;background:repeating-linear-gradient(135deg,var(--card2),var(--card2) 8px,var(--soft) 8px,var(--soft) 16px);"></div>`;
+        media = `<div style="display:flex;gap:2px;padding:2px;background:var(--line);">${panel.repeat(4)}</div>`;
+      }
+    } else if (a.type === "photo") {
+      const img = (a.images || [])[0];
+      media = img
+        ? `<div style="height:178px;background:#000 center/cover no-repeat url('${esc(img)}');"></div>`
+        : `<div style="height:178px;background:repeating-linear-gradient(135deg,var(--card2),var(--card2) 11px,var(--soft) 11px,var(--soft) 22px);display:flex;align-items:center;justify-content:center;"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.04em;color:var(--muted);">[ image — drop photo ]</span></div>`;
+    }
+    return `<article style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;display:flex;flex-direction:column;opacity:${dim};">
+      ${media}
+      <div style="padding:13px 15px 14px;display:flex;flex-direction:column;flex:1;">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${esc(a.feedColor)};flex:0 0 auto;"></span>
+          <span style="font-size:11.5px;font-weight:600;color:var(--muted);">${esc(a.feed)}</span>
+          <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);">${fmtTime(a.time)}</span>
+        </div>
+        <h3 data-act="story" data-id="${a.id}" style="font-family:'Newsreader',serif;font-size:17px;line-height:1.24;margin:0 0 7px;color:var(--ink);font-weight:${a.read ? 480 : 600};cursor:pointer;">${esc(a.title)}</h3>
+        <p style="font-family:'Spectral',serif;font-size:13.5px;line-height:1.55;color:var(--muted);margin:0 0 14px;flex:1;">${esc(a.snippet)}</p>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.05em;color:var(--muted);text-transform:uppercase;">${esc(metaOf(a))}</span>
+          <button data-act="toggleRead" data-id="${a.id}" style="margin-left:auto;border:none;background:transparent;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;">${a.read ? "✓ Read" : "Mark read"}</button>
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+
+  const grid = arts.length
+    ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(262px,1fr));gap:18px;">${cards}</div>`
+    : `<div class="empty">No stories yet. Click <strong>+ Add feed</strong> to get started.</div>`;
+
+  return `
+  <aside style="flex:0 0 236px;border-right:1px solid var(--line);padding:16px 12px;background:var(--card);overflow-y:auto;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px 11px;">
+      <span style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);font-weight:600;">Feeds</span>
+      <span data-act="manager" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--muted);cursor:pointer;line-height:1;">+</span>
+    </div>
+    ${feedRowsHTML}
+    <div style="margin-top:auto;padding:14px 9px 2px;border-top:1px solid var(--line);">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.6;color:var(--muted);">self-hosted · reading-room<br>${S.articles.length} stories stored</div>
+    </div>
+  </aside>
+  <main style="flex:1 1 auto;overflow:hidden;display:flex;flex-direction:column;min-width:0;">
+    <div style="overflow-y:auto;padding:22px 26px 30px;">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;">
+        <div>
+          <div style="font-family:'Newsreader',serif;font-size:26px;font-weight:600;color:var(--ink);letter-spacing:-0.01em;">${esc(filterName())}</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:3px;">${arts.length} stories · full text fetched on your server, no link-outs</div>
+        </div>
+        <button data-act="markAll" style="padding:7px 13px;border:1px solid var(--line);background:transparent;border-radius:9px;color:var(--muted);font-size:12.5px;cursor:pointer;white-space:nowrap;">Mark all read</button>
+      </div>
+      ${grid}
+    </div>
+  </main>`;
+}
+
+// ---- OFFICE ----------------------------------------------------------------
+function officeHTML() {
+  const {office} = tokens();
+  const rows = feedRows();
+  const arts = visibleArticles();
+  let selId = (S.selected != null && arts.some(a => a.id === S.selected)) ? S.selected : (arts[0] && arts[0].id);
+
+  const folders = rows.map(f => {
+    const active = String(S.filter) === String(f.id);
+    const style = `display:flex;align-items:center;gap:9px;width:100%;padding:6px 10px;border:none;border-left:3px solid ${active ? "var(--o-selbar)" : "transparent"};background:${active ? "var(--o-sel)" : "transparent"};color:var(--o-ink);cursor:pointer;font-size:13px;font-weight:${active ? 600 : 500};text-align:left;`;
+    return `<button data-act="filter" data-feed="${esc(f.id)}" style="${style}">
+      <span style="color:var(--o-sub);font-size:13px;">📁</span>
+      <span style="flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.name)}</span>
+      <span style="font-size:11.5px;color:var(--o-sub);">${f.unread}</span>
+    </button>`;
+  }).join("");
+
+  const list = arts.map(a => {
+    const selected = a.id === selId;
+    const rowStyle = `display:flex;align-items:flex-start;gap:10px;padding:9px 14px 9px 11px;cursor:pointer;border-bottom:1px solid var(--o-line);border-left:3px solid ${selected ? "var(--o-selbar)" : "transparent"};background:${selected ? "var(--o-sel)" : "transparent"};`;
+    return `<div data-act="selectMail" data-id="${a.id}" style="${rowStyle}">
+      <span style="width:8px;height:8px;border-radius:50%;background:${a.read ? "transparent" : "var(--o-blue)"};flex:0 0 auto;margin-top:4px;"></span>
+      <div style="flex:1 1 auto;min-width:0;">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span style="font-size:13px;color:var(--o-ink);font-weight:${a.read ? 400 : 700};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0;">${esc(a.feed)}</span>
+          <span style="font-size:11.5px;color:var(--o-sub);flex:0 0 auto;">${fmtTime(a.time)}</span>
+        </div>
+        <div style="font-size:12.5px;color:${a.read ? "var(--o-sub)" : "var(--o-ink)"};font-weight:${a.read ? 400 : 600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">${esc(a.title)}</div>
+        <div style="font-size:12px;color:var(--o-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${esc(a.snippet)}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const sel = arts.find(a => a.id === selId);
+  let pane = `<div class="empty">Select a message to read it here.</div>`;
+  if (sel) {
+    let media = "";
+    const imgs = sel.images || [];
+    if (imgs.length) {
+      media = imgs.map(s => `<img src="${esc(s)}" style="max-width:100%;border-radius:4px;margin-bottom:20px;display:block;">`).join("");
+    } else if (sel.type === "comic" || sel.type === "photo") {
+      media = `<div style="height:232px;border-radius:4px;margin-bottom:20px;background:repeating-linear-gradient(135deg,#eef0f3,#eef0f3 12px,#e2e5ea 12px,#e2e5ea 24px);display:flex;align-items:center;justify-content:center;"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8f98;">[ image — fetched inline ]</span></div>`;
+    }
+    const body = (sel.body || []).map(p =>
+      `<p style="font-size:14.5px;line-height:1.66;color:var(--o-ink);margin:0 0 16px;overflow-wrap:anywhere;">${esc(p)}</p>`).join("");
+    pane = `<div style="flex:1 1 auto;overflow-y:auto;">
+      <div style="background:var(--o-pane);border-bottom:1px solid var(--o-line);padding:18px 28px 0;">
+        <h1 style="font-size:20px;line-height:1.3;font-weight:600;color:var(--o-ink);margin:0 0 14px;">${esc(sel.title)}</h1>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding-bottom:14px;">
+          <span style="width:34px;height:34px;border-radius:50%;background:${esc(sel.feedColor)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:0 0 auto;">${esc(sel.feed.charAt(0))}</span>
+          <div style="min-width:0;flex:1 1 auto;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:13.5px;font-weight:600;color:var(--o-ink);">${esc(sel.feed)}</span>
+              <span style="margin-left:auto;display:flex;align-items:center;gap:14px;color:var(--o-blue);font-size:12.5px;">
+                <span data-act="story" data-id="${sel.id}" style="cursor:pointer;">⤢ Open full story</span>
+              </span>
+            </div>
+            <div style="font-size:12px;color:var(--o-sub);margin-top:2px;">To: You · ${fmtTime(sel.time)} ago</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:22px 28px 40px;">
+        <div style="max-width:640px;">
+          <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:4px;background:#eff6ec;border:1px solid #cfe3c4;margin-bottom:20px;"><span style="color:#107c41;font-size:11px;">✓</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#107c41;letter-spacing:0.03em;">FULL STORY ON SERVER · ${esc(metaOf(sel))}</span></div>
+          ${media}${body}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const cmdBtn = (label, act="") =>
+    `<button ${act} style="padding:6px 11px;border:none;border-radius:5px;background:transparent;cursor:pointer;font-size:13px;color:var(--o-ink);">${label}</button>`;
+  const divider = `<span style="width:1px;height:22px;background:var(--o-line);margin:0 6px;"></span>`;
+
+  return `<div style="${ss(office)};flex:1 1 auto;min-width:0;display:flex;flex-direction:column;height:100%;background:var(--o-bg);">
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:2px;height:46px;padding:0 12px;background:var(--o-pane);border-bottom:1px solid var(--o-line);">
+      <button data-act="manager" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:none;border-radius:5px;background:transparent;cursor:pointer;font-size:13px;color:var(--o-ink);font-weight:600;"><span style="color:var(--o-blue);font-size:15px;">✉</span>New mail</button>
+      ${divider}${cmdBtn("🗑 Delete")}${cmdBtn("🗄 Archive")}${divider}
+      ${cmdBtn("↩ Reply")}${cmdBtn("↪ Reply all")}${cmdBtn("→ Forward")}${divider}
+      ${cmdBtn("⚑ Flag")}${cmdBtn("✉ Read / Unread", 'data-act="markAll"')}
+    </div>
+    <div style="flex:1 1 auto;display:flex;min-height:0;">
+      <div style="flex:0 0 208px;background:var(--o-pane);border-right:1px solid var(--o-line);overflow-y:auto;padding:10px 8px;">
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 10px 7px;font-size:12px;font-weight:600;color:var(--o-sub);"><span style="color:#e3a000;">★</span>Favorites</div>
+        ${folders}
+      </div>
+      <div style="flex:0 0 366px;width:366px;max-width:366px;min-width:0;overflow:hidden;background:var(--o-pane);border-right:1px solid var(--o-line);display:flex;flex-direction:column;min-height:0;">
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:11px 14px 9px;">
+          <span style="font-size:16px;font-weight:700;color:var(--o-ink);">${esc(filterName())}</span>
+          <span style="color:#e3a000;font-size:13px;">★</span>
+          <span style="margin-left:auto;color:var(--o-sub);font-size:14px;letter-spacing:2px;">⊞ ⇅ ☰</span>
+        </div>
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 14px 9px;border-bottom:1px solid var(--o-line);">
+          <span style="font-size:12px;font-weight:600;color:var(--o-blue);">Focused</span>
+          <span style="font-size:12px;color:var(--o-sub);">Other</span>
+          <span style="margin-left:auto;font-size:11.5px;color:var(--o-sub);">By date ⇅</span>
+        </div>
+        <div style="flex:1 1 auto;overflow-y:auto;">${list || '<div class="empty">No messages.</div>'}</div>
+      </div>
+      <div style="flex:1 1 auto;min-width:0;overflow:hidden;display:flex;flex-direction:column;background:var(--o-bg);">${pane}</div>
+    </div>
+  </div>`;
+}
+
+// ---- BOARD -----------------------------------------------------------------
+function boardHTML() {
+  const arts = visibleArticles();
+  const priColors = {high:"#e2483d", med:"#e09f3e", low:"#4a90d6"};
+  const card = a => {
+    const pri = a.words > 1000 ? "high" : (a.type === "comic" ? "low" : "med");
+    const done = a.status === "done";
+    const check = done
+      ? `<span style="width:15px;height:15px;border:1.5px solid #22a06b;border-radius:3px;background:#22a06b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex:0 0 auto;">✓</span>`
+      : `<span style="width:15px;height:15px;border:1.5px solid #8993a4;border-radius:3px;flex:0 0 auto;"></span>`;
+    return `<div data-act="cycle" data-id="${a.id}" style="background:#fff;border-radius:4px;box-shadow:0 1px 1px rgba(9,30,66,0.2);padding:11px 12px;margin-bottom:8px;cursor:pointer;${done ? "opacity:0.78;" : ""}">
+      <div style="font-size:13px;line-height:1.36;color:#172b4d;margin-bottom:12px;">${esc(a.title)}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${check}
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#626f86;">RSS-${a.id}</span>
+        <span style="color:${priColors[pri]};font-weight:700;font-size:15px;line-height:1;flex:0 0 auto;margin-left:auto;">≡</span>
+        <span style="width:22px;height:22px;border-radius:50%;background:#dce0e6;color:#44546f;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:0 0 auto;">${esc(a.feed.charAt(0))}</span>
+      </div>
+    </div>`;
+  };
+  const todo = arts.filter(a => a.status === "todo");
+  const doing = arts.filter(a => a.status === "doing");
+  const done = arts.filter(a => a.status === "done");
+  const pill = n => `<span style="background:#dce0e6;color:#44546f;border-radius:10px;padding:1px 8px;font-size:11px;">${n}</span>`;
+  const col = (label, items, extra="", footer="") => `
+    <div style="flex:1 1 0;min-width:0;background:#f7f8f9;border-radius:6px;display:flex;flex-direction:column;">
+      <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:12px 14px 10px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#626f86;font-weight:600;">${label} ${extra}${pill(items.length)}</div>
+      <div style="flex:1 1 auto;overflow-y:auto;padding:0 8px 8px;">${items.map(card).join("")}${footer}</div>
+    </div>`;
+
+  return `<div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;height:100%;background:#ffffff;">
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;height:54px;padding:0 18px;border-bottom:1px solid #dfe1e6;background:#fff;">
+      <div style="display:flex;align-items:center;gap:8px;width:240px;height:32px;padding:0 11px;border:1px solid #c1c7d0;border-radius:4px;"><span style="color:#626f86;font-size:12px;">⌕</span><span style="font-size:12.5px;color:#626f86;">Search board</span></div>
+      <span style="width:26px;height:26px;border-radius:50%;background:#0c66e4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">B</span>
+      <button style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid #c1c7d0;border-radius:4px;background:#fff;cursor:pointer;font-size:12.5px;color:#44546f;">☰ Filter</button>
+      <button style="margin-left:auto;padding:6px 12px;border:1px solid #0c66e4;border-radius:4px;background:#fff;cursor:pointer;font-size:12.5px;color:#0c66e4;font-weight:600;">Group: Feed</button>
+      <span style="color:#626f86;font-size:18px;cursor:pointer;">⋯</span>
+    </div>
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:15px 18px 8px;">
+      <span style="color:#626f86;font-size:11px;">▾</span>
+      <span style="width:18px;height:18px;border-radius:4px;background:#8270db;flex:0 0 auto;"></span>
+      <span style="font-size:14px;font-weight:600;color:#172b4d;">${esc(filterName())}</span>
+      <span style="font-size:12.5px;color:#626f86;">(${arts.length} work items)</span>
+    </div>
+    <div style="flex:1 1 auto;display:flex;gap:14px;padding:6px 18px 18px;min-height:0;">
+      ${col("To read", todo, "", `<div style="display:flex;align-items:center;gap:7px;padding:7px 8px;color:#626f86;font-size:12.5px;cursor:pointer;">+ Create</div>`)}
+      ${col("Reading", doing)}
+      ${col("Read", done, `<span style="color:#22a06b;">✓</span> `)}
+    </div>
+  </div>`;
+}
+
+// ---- FEED MANAGER ----------------------------------------------------------
+function managerHTML() {
+  const feedList = S.feeds.map((f, i) => {
+    const last = i === S.feeds.length - 1;
+    const caps = {
+      fulltext: ["Full-text ✓", "#5f7a55", "#eef2e9", "#d8e0cd"],
+      comics:   ["Comics ✓",    "#5f7a55", "#eef2e9", "#d8e0cd"],
+      images:   ["Images ✓",    "#5f7a55", "#eef2e9", "#d8e0cd"],
+      summary:  ["Summary only", "#a89e8d", "#f2ecdf", "#e3d9c8"],
+    }[f.capability] || ["Summary only", "#a89e8d", "#f2ecdf", "#e3d9c8"];
+    return `<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;${last ? "" : "border-bottom:1px solid #efe9dc;"}">
+      <span style="width:10px;height:10px;border-radius:50%;background:${esc(f.color)};flex:0 0 auto;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14.5px;font-weight:600;color:#2c2722;">${esc(f.name)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a89e8d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.url)}</div>
+      </div>
+      <span style="font-size:11px;color:${caps[1]};background:${caps[2]};border:1px solid ${caps[3]};padding:3px 9px;border-radius:999px;white-space:nowrap;">${caps[0]}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b8275;width:58px;text-align:right;">${f.unread} new</span>
+      <button data-act="delFeed" data-id="${f.id}" style="width:30px;height:30px;border:1px solid #e8e1d2;border-radius:8px;background:transparent;color:#b5532e;font-size:15px;cursor:pointer;">×</button>
+    </div>`;
+  }).join("");
+
+  const toggle = S.fullText
+    ? `<span data-act="toggleFull" style="width:34px;height:20px;border-radius:999px;background:#5f7a55;position:relative;flex:0 0 auto;cursor:pointer;"><span style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff;"></span></span>`
+    : `<span data-act="toggleFull" style="width:34px;height:20px;border-radius:999px;background:#d6cdbb;position:relative;flex:0 0 auto;cursor:pointer;"><span style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;"></span></span>`;
+
+  return `<div style="height:100%;overflow-y:auto;background:#f7f2e8;">
+    <div style="max-width:980px;margin:0 auto;padding:24px 20px 48px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <button data-act="back" style="font-size:13px;color:#8b8275;background:transparent;border:none;cursor:pointer;padding:6px 0;">‹ Back to reading</button>
+      </div>
+      <div style="background:#fffdf8;border-radius:12px;box-shadow:0 2px 10px rgba(40,34,26,0.08);padding:30px 34px 34px;">
+        <div style="font-family:'Newsreader',serif;font-size:27px;font-weight:600;color:#2c2722;letter-spacing:-0.01em;margin-bottom:4px;">Manage feeds</div>
+        <div style="font-size:13px;color:#8b8275;margin-bottom:24px;">Paste any site or RSS/Atom URL. If a feed only gives summaries, the server follows through and stores the full article.</div>
+        <form data-act="addFeed" style="display:flex;gap:10px;margin-bottom:14px;">
+          <div style="flex:1;display:flex;align-items:center;gap:10px;padding:0 14px;height:46px;border:1px solid #ddd4c2;border-radius:11px;background:#fbf6ec;">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#b09e82;">URL</span>
+            <input class="url-input" name="url" placeholder="example.com/blog or feed.xml" autocomplete="off">
+          </div>
+          <button type="submit" ${S.busy ? "disabled" : ""} style="padding:0 22px;height:46px;border:none;border-radius:11px;background:#b5532e;color:#fff;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;opacity:${S.busy ? 0.6 : 1};">${S.busy ? "Fetching…" : "Fetch & add"}</button>
+        </form>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:26px;">
+          ${toggle}
+          <span style="font-size:13px;color:#4f4a40;">Always fetch the full article — follow link-outs and store the complete text + images locally</span>
+        </div>
+        <div style="font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:#a89e8d;font-weight:600;margin-bottom:10px;">${S.feeds.length} feed${S.feeds.length === 1 ? "" : "s"}</div>
+        <div style="border:1px solid #e8e1d2;border-radius:12px;overflow:hidden;">${feedList || '<div class="empty">No feeds yet.</div>'}</div>
+        <div style="margin-top:16px;font-size:12.5px;color:#a89e8d;">Have a list elsewhere? <span data-act="importOpml" style="color:#b5532e;font-weight:600;cursor:pointer;">Import OPML</span> · <a href="/api/opml" style="color:#b5532e;font-weight:600;text-decoration:none;">Export OPML</a></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- FULL STORY ------------------------------------------------------------
+function storyHTML() {
+  const a = S.articles.find(x => x.id === S.storyId);
+  if (!a) { S.view = "reader"; return readerBodyHTML(); }
+  const idx = S.articles.findIndex(x => x.id === a.id);
+  const mins = Math.max(1, Math.round((a.words || 200) / 230));
+  const metaLine = `FULL STORY FETCHED ON YOUR SERVER · NO LINK-OUT · ${esc(metaOf(a).toUpperCase())} · ~${mins} MIN`;
+  const paras = a.body || [];
+  const imgs = a.images || [];
+  let bodyHTML = "";
+  paras.forEach((p, i) => {
+    bodyHTML += `<p style="font-family:'Newsreader',serif;font-size:19px;line-height:1.72;color:#39342c;margin:0 0 22px;">${esc(p)}</p>`;
+    if (i === 1 && imgs[0]) {
+      bodyHTML += `<img src="${esc(imgs[0])}" style="width:100%;border-radius:10px;margin:8px 0 22px;display:block;">`;
+    }
+  });
+  imgs.slice(paras.length > 1 ? 1 : 0).forEach(s => {
+    bodyHTML += `<img src="${esc(s)}" style="width:100%;border-radius:10px;margin:8px 0 22px;display:block;">`;
+  });
+
+  return `<div style="height:100%;overflow-y:auto;background:#fffdf8;">
+    <div style="height:52px;display:flex;align-items:center;gap:14px;padding:0 22px;background:#fffdf8;border-bottom:1px solid #e8e1d2;position:sticky;top:0;">
+      <span data-act="back" style="font-size:13px;color:#8b8275;cursor:pointer;">‹ All Stories</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:13px;color:#8b8275;">
+        <span data-act="storyPrev" style="cursor:pointer;${idx <= 0 ? "opacity:0.4;pointer-events:none;" : ""}">‹ Prev</span>
+        <span data-act="storyNext" style="cursor:pointer;${idx >= S.articles.length - 1 ? "opacity:0.4;pointer-events:none;" : ""}">Next ›</span>
+        <span data-act="toggleRead" data-id="${a.id}" style="padding:5px 11px;border-radius:8px;background:#b5532e;color:#fff;font-weight:600;cursor:pointer;">${a.read ? "✓ Read" : "✓ Mark read"}</span>
+      </div>
+    </div>
+    <div style="max-width:660px;margin:0 auto;padding:40px 28px 52px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;"><span style="width:8px;height:8px;border-radius:50%;background:${esc(a.feedColor)};"></span><span style="font-size:12.5px;font-weight:600;color:#8b8275;">${esc(a.feed)}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a89e8d;">· ${fmtTime(a.time)} ago</span></div>
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#eef2e9;border:1px solid #d8e0cd;margin-bottom:22px;">
+        <span style="color:#5f7a55;font-size:13px;">✓</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5f7a55;letter-spacing:0.02em;">${metaLine}</span>
+      </div>
+      <h1 style="font-family:'Newsreader',serif;font-size:38px;line-height:1.14;font-weight:600;color:#2c2722;letter-spacing:-0.015em;margin:0 0 14px;">${esc(a.title)}</h1>
+      <div style="font-size:13.5px;color:#8b8275;margin-bottom:30px;">${esc(a.feed)}</div>
+      ${bodyHTML || '<p style="font-family:\'Newsreader\',serif;font-size:19px;color:#39342c;">No body text was extracted for this item.</p>'}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:34px;padding-top:22px;border-top:1px solid #e8e1d2;">
+        <button data-act="storyPrev" ${idx <= 0 ? "disabled" : ""} style="padding:9px 16px;border:1px solid #e8e1d2;background:transparent;border-radius:9px;font-size:13px;color:#6f6658;cursor:pointer;opacity:${idx <= 0 ? 0.4 : 1};">‹ Previous</button>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a89e8d;">${idx + 1} of ${S.articles.length}</span>
+        <button data-act="storyNext" ${idx >= S.articles.length - 1 ? "disabled" : ""} style="padding:9px 16px;border:none;background:#2c2722;color:#f7f2e8;border-radius:9px;font-size:13px;cursor:pointer;opacity:${idx >= S.articles.length - 1 ? 0.4 : 1};">Next story ›</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- render ----------------------------------------------------------------
+function readerBodyHTML() {
+  if (S.layout === "office") return officeHTML();
+  if (S.layout === "board") return boardHTML();
+  return homeHTML();
+}
+
+function render() {
+  const {paper} = tokens();
+  const app = $("#app");
+  if (S.view === "manager") {
+    app.setAttribute("style", ss(paper));
+    app.innerHTML = headerHTML() + managerHTML();
+  } else if (S.view === "story") {
+    app.setAttribute("style", ss(paper));
+    app.innerHTML = storyHTML();
+  } else {
+    app.setAttribute("style", ss(paper));
+    app.innerHTML = headerHTML()
+      + `<div style="flex:1 1 auto;display:flex;min-height:0;background:var(--paper);">${readerBodyHTML()}</div>`;
+  }
+}
+
+// ---- events ----------------------------------------------------------------
+async function withBusy(fn) {
+  S.busy = true; render();
+  try { await fn(); } finally { S.busy = false; }
+  await load();
+}
+
+document.addEventListener("submit", async e => {
+  const form = e.target.closest('[data-act="addFeed"]');
+  if (!form) return;
+  e.preventDefault();
+  const url = form.url.value.trim();
+  if (!url) return;
+  await withBusy(async () => {
+    const r = await api.addFeed(url, S.fullText);
+    if (!r.ok) { const j = await r.json().catch(() => ({})); alert("Could not add feed: " + (j.detail || r.status)); }
+  });
+});
+
+document.addEventListener("click", async e => {
+  const t = e.target.closest("[data-act]");
+  if (!t) return;
+  const act = t.dataset.act;
+  const id = t.dataset.id ? Number(t.dataset.id) : null;
+
+  switch (act) {
+    case "layout":
+      S.layout = t.dataset.layout; localStorage.setItem("rr-layout", S.layout); render(); break;
+    case "theme":
+      S.theme = S.theme === "dark" ? "light" : "dark"; localStorage.setItem("rr-theme", S.theme); render(); break;
+    case "filter":
+      S.filter = t.dataset.feed; S.selected = null; render(); break;
+    case "manager":
+      S.view = "manager"; render(); break;
+    case "back":
+      S.view = "reader"; render(); break;
+    case "toggleFull":
+      S.fullText = !S.fullText; render(); break;
+    case "selectMail":
+      S.selected = id; render(); break;
+    case "story":
+      S.storyId = id; S.view = "story"; render(); break;
+    case "storyPrev": {
+      const i = S.articles.findIndex(x => x.id === S.storyId);
+      if (i > 0) { S.storyId = S.articles[i - 1].id; render(); } break;
+    }
+    case "storyNext": {
+      const i = S.articles.findIndex(x => x.id === S.storyId);
+      if (i >= 0 && i < S.articles.length - 1) { S.storyId = S.articles[i + 1].id; render(); } break;
+    }
+    case "toggleRead": {
+      const a = S.articles.find(x => x.id === id);
+      if (a) { a.read = !a.read; await api.patch(id, {read: a.read}); await load(); }
+      break;
+    }
+    case "cycle": {
+      const a = S.articles.find(x => x.id === id);
+      if (a) { const next = {todo:"doing", doing:"done", done:"todo"}[a.status];
+        a.status = next; await api.patch(id, {status: next}); await load(); }
+      break;
+    }
+    case "markAll":
+      await api.markAll(S.filter); await load(); break;
+    case "delFeed":
+      if (confirm("Remove this feed and its articles?")) { await api.delFeed(id); await load(); }
+      break;
+    case "refresh":
+      await withBusy(() => api.refresh()); break;
+    case "importOpml": {
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = ".opml,.xml,text/xml";
+      inp.onchange = async () => {
+        const file = inp.files[0]; if (!file) return;
+        await withBusy(async () => { await api.importOpml(await file.text()); });
+      };
+      inp.click();
+      break;
+    }
+  }
+});
+
+// ---- boot ------------------------------------------------------------------
+load();
+</script>
+</body>
+</html>

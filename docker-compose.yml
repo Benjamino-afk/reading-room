@@ -1,0 +1,15 @@
+# Reading Room — single container + one volume for SQLite & fetched images.
+# Default bridge network (ADM only NATs the default bridge on the 204 NAS).
+services:
+  reading-room:
+    build: .
+    image: reading-room:latest
+    container_name: reading-room
+    network_mode: bridge
+    ports:
+      - "8087:8080"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    restart: unless-stopped
