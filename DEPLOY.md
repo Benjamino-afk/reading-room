@@ -1,78 +1,53 @@
-# Deploying Reading Room to the 204 NAS (Portainer / Docker)
+# Deploy Reading Room
 
-Single container, builds on the NAS, default bridge network, host port **8087**.
-You run the deploy; this file is the runbook.
+The image is built automatically by GitHub and stored online. The NAS just
+downloads and runs it. Four steps.
 
-## Target
-- **Host:** Asustor AS5404T — `admin@192.168.1.204` (**must use `ssh -tt`**, ADM closes the channel without a PTY).
-- **Path:** `/volume1/tank/config/reading-room/` (matches the `/volume1/tank/config/<app>` convention).
-- **Data volume:** `./data` (SQLite DB + fetched images) — created on first run, owned by root-in-container. No PUID/PGID needed (the app runs as root inside its own container; nothing else touches the volume).
-- **Network:** `network_mode: bridge` — required, since on ADM only the default bridge has internet egress. Single container, no peer DNS, so the legacy bridge is fine.
+## 1. Make the image downloadable (one time)
+Go to https://github.com/Benjamino-afk/reading-room → **Packages** (right side) →
+click **reading-room** → **Package settings** → **Change visibility** → **Public**.
 
-## 1. Confirm port 8087 is free on the 204
-Known ports in use: Glance 8085, photo-scroller 8086, trade 8090, blur-review 8099, focal 8420.
-8087 should be free — verify:
-```bash
-ssh -tt admin@192.168.1.204 "ss -tlnp 2>/dev/null | grep ':8087 ' || echo 'free'"
-```
-If taken, change the left side of `ports: 8087:8080` in docker-compose.yml.
+(That's the easy way. If you'd rather keep it private, tell me and I'll give you
+the Portainer login steps instead.)
 
-## 2. Copy the project up
-From the project folder on your machine (excludes the local venv / data):
-```bash
-cd "C:/Users/User/Documents/AIwork/RSS Server/reading-room"
-scp -r app Dockerfile docker-compose.yml requirements.txt README.md \
-    admin@192.168.1.204:/volume1/tank/config/reading-room/
-```
-(If `/volume1/tank/config/reading-room/` doesn't exist:
-`ssh -tt admin@192.168.1.204 "mkdir -p /volume1/tank/config/reading-room"`.)
+## 2. Add the stack in Portainer
+Portainer → **Stacks** → **Add stack** → name it `reading-room` → paste this in the
+web editor → **Deploy the stack**:
 
-## 3. Build & start (on the NAS)
-```bash
-ssh -tt admin@192.168.1.204 \
-  "cd /volume1/tank/config/reading-room && docker compose up -d --build"
-```
-First build pulls `python:3.12-slim` and compiles trafilatura/lxml — a few minutes on the N5105.
-
-### Or via Portainer + GHCR (no NAS build — `admin` has no daemon build access)
-Portainer can't build from a `build:` context, and the NAS `admin` account can't
-reach the Docker daemon to build. So let CI build the image and have Portainer pull it:
-
-1. `.github/workflows/docker-image.yml` builds on every push to `main` and publishes
-   `ghcr.io/benjamino-afk/reading-room:latest`.
-2. If the GHCR package is **private**, in Portainer add the registry once:
-   Registries → Add → Custom → URL `ghcr.io`, username = your GitHub user,
-   password = a PAT with `read:packages`. (Or make the package public on GitHub.)
-3. Portainer → Stacks → Add stack → name `reading-room` → paste
-   **`docker-compose.portainer.yml`** → Deploy. It pulls the prebuilt image; the
-   data volume is the absolute path `/volume1/tank/config/reading-room/data`.
-4. To update later: re-run the workflow (push to `main`), then in Portainer
-   pull & redeploy the stack.
-
-## 4. Verify
-```bash
-ssh -tt admin@192.168.1.204 "curl -fs http://localhost:8087/api/health"   # {"ok":true}
-```
-Then open over Tailscale: **http://as5404t-6005-1:8087** (or `http://192.168.1.204:8087` on the LAN).
-Add a feed in the manager (e.g. `https://hnrss.org/frontpage`) and confirm articles + full-text fetch.
-
-## 5. Glance tile
-Add to the Glance config (Home Server → Media stack monitor), mirroring the blur-review/focal tiles:
 ```yaml
-- title: Reading Room
-  url: http://192.168.1.204:8087
-  check-url: http://192.168.1.204:8087/api/health
-  icon: si:rss
+services:
+  reading-room:
+    image: ghcr.io/benjamino-afk/reading-room:latest
+    container_name: reading-room
+    network_mode: bridge
+    ports:
+      - "8087:8080"
+    volumes:
+      - /volume1/tank/config/reading-room/data:/data
+    restart: unless-stopped
 ```
-Then check the Glance dashboard renders it (per the NAS→Glance sync habit).
+
+## 3. Open it
+- On the LAN: **http://192.168.1.204:8087**
+- Anywhere (Tailscale): **http://as5404t-6005-1:8087**
+
+## 4. Add your first feed
+Click **+ Add feed**, paste a site or feed URL (e.g. `https://hnrss.org/frontpage`),
+hit **Fetch & add**. Done.
+
+---
 
 ## Updating later
-```bash
-scp -r app admin@192.168.1.204:/volume1/tank/config/reading-room/
-ssh -tt admin@192.168.1.204 \
-  "cd /volume1/tank/config/reading-room && docker compose up -d --build"
-```
-The `./data` volume (DB + images) persists across rebuilds.
+When the code changes (a push to `main`), GitHub rebuilds the image. To get the
+new version on the NAS: Portainer → the `reading-room` stack → **Update the stack**
+→ tick **Re-pull image** → **Update**.
 
-## Config knobs (in docker-compose.yml `environment:`)
-`POLL_INTERVAL` (min), `MAX_IMAGES` per article, `FETCH_TIMEOUT` (s), `READONLY=1` to freeze writes.
+## Settings (optional)
+Add these under the service if you want to change defaults (all optional):
+```yaml
+    environment:
+      POLL_INTERVAL: "30"   # how often to check feeds, in minutes
+      MAX_IMAGES: "12"      # images saved per article
+```
+Your articles and images live in `/volume1/tank/config/reading-room/data` and
+survive updates.
