@@ -34,7 +34,20 @@ ssh -tt admin@192.168.1.204 \
 ```
 First build pulls `python:3.12-slim` and compiles trafilatura/lxml — a few minutes on the N5105.
 
-Or via **Portainer**: Stacks → Add stack → name `reading-room` → upload/paste `docker-compose.yml` → set the build context to the uploaded folder → Deploy. (CLI build is simpler here because Portainer's web editor doesn't carry the build context.)
+### Or via Portainer + GHCR (no NAS build — `admin` has no daemon build access)
+Portainer can't build from a `build:` context, and the NAS `admin` account can't
+reach the Docker daemon to build. So let CI build the image and have Portainer pull it:
+
+1. `.github/workflows/docker-image.yml` builds on every push to `main` and publishes
+   `ghcr.io/benjamino-afk/reading-room:latest`.
+2. If the GHCR package is **private**, in Portainer add the registry once:
+   Registries → Add → Custom → URL `ghcr.io`, username = your GitHub user,
+   password = a PAT with `read:packages`. (Or make the package public on GitHub.)
+3. Portainer → Stacks → Add stack → name `reading-room` → paste
+   **`docker-compose.portainer.yml`** → Deploy. It pulls the prebuilt image; the
+   data volume is the absolute path `/volume1/tank/config/reading-room/data`.
+4. To update later: re-run the workflow (push to `main`), then in Portainer
+   pull & redeploy the stack.
 
 ## 4. Verify
 ```bash

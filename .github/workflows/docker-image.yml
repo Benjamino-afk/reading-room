@@ -1,0 +1,44 @@
+name: Build & publish image
+
+# The NAS admin account can't access the Docker daemon to build, so CI builds
+# the image and publishes it to GHCR; Portainer on the NAS just pulls it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}   # -> ghcr.io/benjamino-afk/reading-room (lowercased)
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build & push (linux/amd64 — the N5105 NAS)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

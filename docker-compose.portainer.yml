@@ -1,0 +1,23 @@
+# Portainer stack for the 204 NAS — pulls the CI-built image from GHCR.
+# Use this when deploying via the Portainer UI (no build context, no daemon
+# build access needed). The image is published by .github/workflows/docker-image.yml.
+#
+# If the GHCR package is PRIVATE, add a GHCR registry in Portainer first
+# (Registries -> Add -> Custom, ghcr.io, username = github user, password = a
+# PAT with read:packages), or make the package public on GitHub.
+services:
+  reading-room:
+    image: ghcr.io/benjamino-afk/reading-room:latest
+    container_name: reading-room
+    network_mode: bridge
+    ports:
+      - "8087:8080"
+    volumes:
+      - /volume1/tank/config/reading-room/data:/data
+    environment:
+      DATA_DIR: /data
+      POLL_INTERVAL: "30"   # minutes between automatic feed polls
+      READONLY: "0"
+      MAX_IMAGES: "12"
+      FETCH_TIMEOUT: "20"
+    restart: unless-stopped
