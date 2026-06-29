@@ -20,8 +20,13 @@ https://github.com/settings/tokens/new?scopes=read:packages&description=NAS+GHCR
 You only ever do this once.
 
 ## 2. Add the stack in Portainer
-Portainer → **Stacks** → **Add stack** → name it `reading-room` → paste this in the
-web editor → **Deploy the stack**:
+Portainer → **Stacks** → **Add stack** → name it `reading-room`.
+
+Open the file **`docker-compose.portainer.yml`** from this repo (the *raw* file, not
+this README), select all, copy, and paste it into the Portainer web editor → **Deploy
+the stack**. Copying from the raw file avoids dragging in markdown code-fence lines.
+
+For reference, the file contains exactly this (no ` ``` ` fences, no `---` separators):
 
 ```yaml
 services:
@@ -43,8 +48,6 @@ services:
 ## 4. Add your first feed
 Click **+ Add feed**, paste a site or feed URL (e.g. `https://hnrss.org/frontpage`),
 hit **Fetch & add**. Done.
-
----
 
 ## Updating later
 When the code changes (a push to `main`), GitHub rebuilds the image. To get the

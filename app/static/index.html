@@ -136,25 +136,31 @@ function filterName() {
 
 // ---- header ----------------------------------------------------------------
 function headerHTML() {
-  const {dark} = tokens();
+  const {office, dark} = tokens();
+  // Header palette follows the active layout so the logo + chrome match the view.
+  const h = S.layout === "office"
+    ? { bg: office["--o-pane"], ink: office["--o-ink"], line: office["--o-line"], accent: office["--o-blue"], soft: dark ? "#3b3a39" : "#e7ebf1", muted: office["--o-sub"] }
+    : S.layout === "board"
+    ? { bg: "#ffffff", ink: "#172b4d", line: "#dfe1e6", accent: "#0c66e4", soft: "#ebecf0", muted: "#626f86" }
+    : { bg: "var(--card)", ink: "var(--ink)", line: "var(--line)", accent: "var(--accent)", soft: "var(--soft)", muted: "var(--muted)" };
   const segBase = "padding:7px 15px;border:none;border-radius:8px;font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;min-width:66px";
   const seg = id => S.layout === id
-    ? `${segBase};background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,0.16)`
-    : `${segBase};background:transparent;color:var(--muted)`;
+    ? `${segBase};background:${h.bg};color:${h.ink};box-shadow:0 1px 2px rgba(0,0,0,0.16)`
+    : `${segBase};background:transparent;color:${h.muted}`;
   return `
-  <div style="flex:0 0 auto;height:62px;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--card);border-bottom:1px solid var(--line);">
+  <div style="flex:0 0 auto;height:62px;display:flex;align-items:center;gap:16px;padding:0 18px;background:${h.bg};border-bottom:1px solid ${h.line};transition:background 0.2s,border-color 0.2s;">
     <div style="display:flex;align-items:center;gap:11px;">
-      <div style="width:27px;height:27px;border-radius:7px;background:var(--accent);box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);"></div>
-      <span style="font-family:'Newsreader',serif;font-size:22px;font-weight:600;color:var(--ink);letter-spacing:-0.01em;">Reading&nbsp;Room</span>
+      <div style="width:27px;height:27px;border-radius:7px;background:${h.accent};box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);"></div>
+      <span style="font-family:'Newsreader',serif;font-size:22px;font-weight:600;color:${h.ink};letter-spacing:-0.01em;">Reading&nbsp;Room</span>
     </div>
-    <div style="margin:0 auto;display:flex;gap:4px;padding:4px;background:var(--soft);border-radius:11px;">
+    <div style="margin:0 auto;display:flex;gap:4px;padding:4px;background:${h.soft};border-radius:11px;">
       <button data-act="layout" data-layout="home" style="${seg("home")}">Home</button>
       <button data-act="layout" data-layout="office" style="${seg("office")}">Office</button>
       <button data-act="layout" data-layout="board" style="${seg("board")}">Board</button>
     </div>
-    <button data-act="refresh" title="Poll feeds now" style="padding:7px 12px;border:1px solid var(--line);background:var(--card);border-radius:9px;color:var(--muted);font-size:13px;cursor:pointer;">${S.busy ? "Syncing…" : "↻ Sync"}</button>
-    <button data-act="theme" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--line);background:var(--card);border-radius:9px;color:var(--muted);font-size:13px;cursor:pointer;"><span style="font-size:14px;">${dark ? "☾" : "☀"}</span>${dark ? "Dark" : "Light"}</button>
-    <button data-act="manager" style="padding:8px 15px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Add feed</button>
+    <button data-act="refresh" title="Poll feeds now" style="padding:7px 12px;border:1px solid ${h.line};background:${h.bg};border-radius:9px;color:${h.muted};font-size:13px;cursor:pointer;">${S.busy ? "Syncing…" : "↻ Sync"}</button>
+    <button data-act="theme" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid ${h.line};background:${h.bg};border-radius:9px;color:${h.muted};font-size:13px;cursor:pointer;"><span style="font-size:14px;">${dark ? "☾" : "☀"}</span>${dark ? "Dark" : "Light"}</button>
+    <button data-act="manager" style="padding:8px 15px;border:none;border-radius:9px;background:${h.accent};color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Add feed</button>
   </div>`;
 }
 
@@ -311,6 +317,12 @@ function officeHTML() {
   const cmdBtn = (label, act="") =>
     `<button ${act} style="padding:6px 11px;border:none;border-radius:5px;background:transparent;cursor:pointer;font-size:13px;color:var(--o-ink);">${label}</button>`;
   const divider = `<span style="width:1px;height:22px;background:var(--o-line);margin:0 6px;"></span>`;
+  const railIcon = (glyph, label, active=false) =>
+    `<span title="${label}" style="position:relative;width:38px;height:36px;display:flex;align-items:center;justify-content:center;font-size:17px;border-radius:6px;cursor:pointer;color:${active ? "var(--o-blue)" : "var(--o-sub)"};background:${active ? "var(--o-sel)" : "transparent"};">${active ? `<span style="position:absolute;left:-6px;top:9px;bottom:9px;width:3px;border-radius:2px;background:var(--o-selbar);"></span>` : ""}${glyph}</span>`;
+  const navRail = `<div style="flex:0 0 48px;background:var(--o-bg);border-right:1px solid var(--o-line);display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0;">
+    ${railIcon("✉", "Mail", true)}${railIcon("📅", "Calendar")}${railIcon("👥", "People")}${railIcon("✓", "To Do")}
+    <span style="margin-top:auto;"></span>${railIcon("⚙", "Settings")}
+  </div>`;
 
   return `<div style="${ss(office)};flex:1 1 auto;min-width:0;display:flex;flex-direction:column;height:100%;background:var(--o-bg);">
     <div style="flex:0 0 auto;display:flex;align-items:center;gap:2px;height:46px;padding:0 12px;background:var(--o-pane);border-bottom:1px solid var(--o-line);">
@@ -320,7 +332,8 @@ function officeHTML() {
       ${cmdBtn("⚑ Flag")}${cmdBtn("✉ Read / Unread", 'data-act="markAll"')}
     </div>
     <div style="flex:1 1 auto;display:flex;min-height:0;">
-      <div style="flex:0 0 208px;background:var(--o-pane);border-right:1px solid var(--o-line);overflow-y:auto;padding:10px 8px;">
+      ${navRail}
+      <div style="flex:0 0 176px;background:var(--o-pane);border-right:1px solid var(--o-line);overflow-y:auto;padding:10px 8px;">
         <div style="display:flex;align-items:center;gap:6px;padding:4px 10px 7px;font-size:12px;font-weight:600;color:var(--o-sub);"><span style="color:#e3a000;">★</span>Favorites</div>
         ${folders}
       </div>
@@ -350,9 +363,9 @@ function boardHTML() {
     const pri = a.words > 1000 ? "high" : (a.type === "comic" ? "low" : "med");
     const done = a.status === "done";
     const check = done
-      ? `<span style="width:15px;height:15px;border:1.5px solid #22a06b;border-radius:3px;background:#22a06b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex:0 0 auto;">✓</span>`
-      : `<span style="width:15px;height:15px;border:1.5px solid #8993a4;border-radius:3px;flex:0 0 auto;"></span>`;
-    return `<div data-act="cycle" data-id="${a.id}" style="background:#fff;border-radius:4px;box-shadow:0 1px 1px rgba(9,30,66,0.2);padding:11px 12px;margin-bottom:8px;cursor:pointer;${done ? "opacity:0.78;" : ""}">
+      ? `<span data-act="cycle" data-id="${a.id}" title="Move to next column" style="width:15px;height:15px;border:1.5px solid #22a06b;border-radius:3px;background:#22a06b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex:0 0 auto;cursor:pointer;">✓</span>`
+      : `<span data-act="cycle" data-id="${a.id}" title="Move to next column" style="width:15px;height:15px;border:1.5px solid #8993a4;border-radius:3px;flex:0 0 auto;cursor:pointer;"></span>`;
+    return `<div data-act="story" data-id="${a.id}" style="background:#fff;border-radius:4px;box-shadow:0 1px 1px rgba(9,30,66,0.2);padding:11px 12px;margin-bottom:8px;cursor:pointer;${done ? "opacity:0.78;" : ""}">
       <div style="font-size:13px;line-height:1.36;color:#172b4d;margin-bottom:12px;">${esc(a.title)}</div>
       <div style="display:flex;align-items:center;gap:8px;">
         ${check}
