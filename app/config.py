@@ -11,7 +11,7 @@ READONLY = os.getenv("READONLY", "0") == "1"
 MAX_IMAGES = int(os.getenv("MAX_IMAGES", "12"))
 FETCH_TIMEOUT = float(os.getenv("FETCH_TIMEOUT", "20"))
 
-USER_AGENT = "ReadingRoom/0.1 (+https://github.com/self-hosted; feed reader)"
+USER_AGENT = "ReadingRoom/0.1 (+https://github.com/Benjamino-afk/reading-room)"
 
 # Per-feed identity colours, assigned round-robin as feeds are added.
 FEED_COLORS = [

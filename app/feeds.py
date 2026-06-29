@@ -27,18 +27,31 @@ def _entry_time(entry) -> float:
 
 
 def _fetch(url: str) -> httpx.Response:
-    r = httpx.get(
-        url, timeout=config.FETCH_TIMEOUT, follow_redirects=True,
-        headers={"User-Agent": config.USER_AGENT},
-    )
+    headers = {
+        "User-Agent": config.USER_AGENT,
+        "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.5",
+    }
+    r = httpx.get(url, timeout=config.FETCH_TIMEOUT, follow_redirects=True, headers=headers)
+    if r.status_code == 429:  # rate-limited (Reddit et al.) — back off once, then give up
+        retry_after = r.headers.get("Retry-After", "")
+        try:
+            wait = float(retry_after) if retry_after else 3.0
+        except ValueError:
+            wait = 3.0
+        if wait <= 10:
+            time.sleep(wait)
+            r = httpx.get(url, timeout=config.FETCH_TIMEOUT, follow_redirects=True, headers=headers)
     r.raise_for_status()
     return r
 
 
-def discover(url: str) -> tuple[str, str | None]:
+def discover(url: str):
     """Resolve any site/feed URL to a real feed URL + its human site URL.
 
-    Returns (feed_url, site_url). Raises ValueError if nothing parses.
+    Returns (feed_url, site_url, parsed) where ``parsed`` is the already-fetched
+    feed when the URL was itself a feed (else None). Raises ValueError if nothing
+    parses. Returning the parse lets callers avoid re-fetching the same URL —
+    which is what trips rate limits (e.g. Reddit 429s a burst of requests).
     """
     try:
         r = _fetch(url)
@@ -49,34 +62,39 @@ def discover(url: str) -> tuple[str, str | None]:
     parsed = feedparser.parse(r.content)
     if parsed.entries:
         site = parsed.feed.get("link") or url
-        return url, site
+        return url, site, parsed
 
     # Otherwise it's a web page — look for <link rel=alternate> feed links.
     soup = BeautifulSoup(r.text, "html.parser")
     for link in soup.find_all("link", rel="alternate"):
         if link.get("type") in _FEED_TYPES and link.get("href"):
             feed_url = httpx.URL(str(r.url)).join(link["href"])
-            return str(feed_url), url
+            return str(feed_url), url, None
     raise ValueError(f"no feed found at {url}")
 
 
 def add(url: str, full_text: bool) -> int:
-    feed_url, site_url = discover(url)
-    parsed = feedparser.parse(_fetch(feed_url).content)
+    feed_url, site_url, parsed = discover(url)
+    if parsed is None:  # discovered a feed link on a web page — fetch it once
+        parsed = feedparser.parse(_fetch(feed_url).content)
     name = parsed.feed.get("title") or urlparse(feed_url).netloc or feed_url
     feed_id = db.add_feed(name, feed_url, site_url, full_text)
-    poll(feed_id)
+    poll(feed_id, parsed)  # reuse the parse — no extra request
     return feed_id
 
 
-def poll(feed_id: int) -> int:
-    """Fetch a feed and store any new articles. Returns count of new items."""
+def poll(feed_id: int, parsed=None) -> int:
+    """Fetch a feed and store any new articles. Returns count of new items.
+
+    ``parsed`` may be a feed already fetched by the caller, to avoid a re-fetch.
+    """
     if config.READONLY:
         return 0
     feed = db.get_feed(feed_id)
     if feed is None:
         return 0
-    parsed = feedparser.parse(_fetch(feed["url"]).content)
+    if parsed is None:
+        parsed = feedparser.parse(_fetch(feed["url"]).content)
     full_text = bool(feed["full_text"])
     new = 0
     caps: set[str] = set()
