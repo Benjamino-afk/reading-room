@@ -539,6 +539,18 @@ function storyHTML() {
   </div>`;
 }
 
+// ---- popout modal ----------------------------------------------------------
+// Backdrop closes on click; the inner window carries data-act="modalKeep" so a
+// click on story content resolves there (a no-op) instead of bubbling to close.
+function modalHTML() {
+  return `
+  <div data-act="back" style="position:fixed;inset:0;z-index:60;background:rgba(15,20,30,0.55);display:flex;align-items:center;justify-content:center;padding:28px;">
+    <div data-act="modalKeep" style="position:relative;width:min(880px,100%);height:min(88vh,940px);border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.45);display:flex;flex-direction:column;">
+      ${storyHTML()}
+    </div>
+  </div>`;
+}
+
 // ---- render ----------------------------------------------------------------
 function readerBodyHTML() {
   if (S.layout === "office") return officeHTML();
@@ -549,17 +561,18 @@ function readerBodyHTML() {
 function render() {
   const {paper} = tokens();
   const app = $("#app");
+  app.setAttribute("style", ss(paper));
   if (S.view === "manager") {
-    app.setAttribute("style", ss(paper));
     app.innerHTML = headerHTML() + managerHTML();
-  } else if (S.view === "story") {
-    app.setAttribute("style", ss(paper));
-    app.innerHTML = storyHTML();
-  } else {
-    app.setAttribute("style", ss(paper));
-    app.innerHTML = headerHTML()
-      + `<div style="flex:1 1 auto;display:flex;min-height:0;background:var(--paper);">${readerBodyHTML()}</div>`;
+    return;
   }
+  // The story opens as a popout modal floating over the current layout, so the
+  // board/grid/list stays visible behind it (rather than replacing the screen).
+  const reader = headerHTML()
+    + `<div style="flex:1 1 auto;display:flex;min-height:0;background:var(--paper);">${readerBodyHTML()}</div>`;
+  const storyOpen = S.view === "story" && S.articles.some(x => x.id === S.storyId);
+  app.innerHTML = storyOpen ? reader + modalHTML() : reader;
+  if (S.view === "story" && !storyOpen) S.view = "reader";
 }
 
 // ---- events ----------------------------------------------------------------
@@ -568,6 +581,10 @@ async function withBusy(fn) {
   try { await fn(); } finally { S.busy = false; }
   await load();
 }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && S.view === "story") { S.view = "reader"; render(); }
+});
 
 document.addEventListener("submit", async e => {
   const form = e.target.closest('[data-act="addFeed"]');
@@ -598,6 +615,8 @@ document.addEventListener("click", async e => {
       S.view = "manager"; render(); break;
     case "back":
       S.view = "reader"; render(); break;
+    case "modalKeep":
+      break;  // click landed inside the popout window — keep it open
     case "toggleFull":
       S.fullText = !S.fullText; render(); break;
     case "selectMail":
