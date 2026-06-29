@@ -76,6 +76,7 @@ const S = {
   theme: localStorage.getItem("rr-theme") || "light",
   accent: localStorage.getItem("rr-accent") || "terracotta",
   filter: "all",
+  boardFilter: false,    // board-view feed picker dropdown open?
   view: "reader",        // reader | manager | story
   storyId: null,
   selected: null,
@@ -420,7 +421,18 @@ function boardHTML() {
     <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;height:54px;padding:0 18px;border-bottom:1px solid ${b["--b-line"]};background:${b["--b-bg"]};">
       <div style="display:flex;align-items:center;gap:8px;width:240px;height:32px;padding:0 11px;border:1px solid ${b["--b-line"]};border-radius:4px;"><span style="color:${b["--b-sub"]};font-size:12px;">⌕</span><span style="font-size:12.5px;color:${b["--b-sub"]};">Search board</span></div>
       <span style="width:26px;height:26px;border-radius:50%;background:${b["--b-accent"]};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">B</span>
-      <button style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid ${b["--b-line"]};border-radius:4px;background:${b["--b-card"]};cursor:pointer;font-size:12.5px;color:${b["--b-chipink"]};">☰ Filter</button>
+      <div style="position:relative;">
+        <button data-act="boardFilter" style="display:flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid ${S.boardFilter ? b["--b-accent"] : b["--b-line"]};border-radius:4px;background:${b["--b-card"]};cursor:pointer;font-size:12.5px;color:${S.filter === "all" ? b["--b-chipink"] : b["--b-accent"]};font-weight:${S.filter === "all" ? 400 : 600};">☰ ${esc(filterName())} ▾</button>
+        ${S.boardFilter ? `<div data-act="modalKeep" style="position:absolute;top:36px;left:0;z-index:40;width:230px;max-height:340px;overflow-y:auto;background:${b["--b-card"]};border:1px solid ${b["--b-line"]};border-radius:6px;box-shadow:0 8px 24px ${b["--b-shadow"]};padding:5px;">${
+          feedRows().map(f => {
+            const active = String(S.filter) === String(f.id);
+            return `<button data-act="filter" data-feed="${esc(f.id)}" style="display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border:none;border-radius:4px;cursor:pointer;text-align:left;font-size:13px;background:${active ? b["--b-col"] : "transparent"};color:${b["--b-ink"]};font-weight:${active ? 600 : 400};">
+              <span style="width:9px;height:9px;border-radius:50%;background:${esc(f.color)};flex:0 0 auto;"></span>
+              <span style="flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.name)}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:${b["--b-sub"]};">${f.unread}</span>
+            </button>`;
+          }).join("")}</div>` : ""}
+      </div>
       <button style="margin-left:auto;padding:6px 12px;border:1px solid ${b["--b-accent"]};border-radius:4px;background:${b["--b-card"]};cursor:pointer;font-size:12.5px;color:${b["--b-accent"]};font-weight:600;">Group: Feed</button>
       <span style="color:${b["--b-sub"]};font-size:18px;cursor:pointer;">⋯</span>
     </div>
@@ -545,7 +557,7 @@ function storyHTML() {
 function modalHTML() {
   return `
   <div data-act="back" style="position:fixed;inset:0;z-index:60;background:rgba(15,20,30,0.55);display:flex;align-items:center;justify-content:center;padding:28px;">
-    <div data-act="modalKeep" style="position:relative;width:min(880px,100%);height:min(88vh,940px);border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.45);display:flex;flex-direction:column;">
+    <div data-act="modalKeep" style="position:relative;width:min(720px,92%);height:min(80vh,860px);border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.45);display:flex;flex-direction:column;">
       ${storyHTML()}
     </div>
   </div>`;
@@ -600,6 +612,11 @@ document.addEventListener("submit", async e => {
 
 document.addEventListener("click", async e => {
   const t = e.target.closest("[data-act]");
+  // Close the Board feed picker on any click that isn't toggling/using it.
+  if (S.boardFilter && (!t || !["boardFilter", "filter", "modalKeep"].includes(t.dataset.act))) {
+    S.boardFilter = false;
+    if (!t) { render(); return; }
+  }
   if (!t) return;
   const act = t.dataset.act;
   const id = t.dataset.id ? Number(t.dataset.id) : null;
@@ -610,7 +627,9 @@ document.addEventListener("click", async e => {
     case "theme":
       S.theme = S.theme === "dark" ? "light" : "dark"; localStorage.setItem("rr-theme", S.theme); render(); break;
     case "filter":
-      S.filter = t.dataset.feed; S.selected = null; render(); break;
+      S.filter = t.dataset.feed; S.selected = null; S.boardFilter = false; render(); break;
+    case "boardFilter":
+      S.boardFilter = !S.boardFilter; render(); break;
     case "manager":
       S.view = "manager"; render(); break;
     case "back":
