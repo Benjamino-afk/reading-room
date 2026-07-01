@@ -8,8 +8,11 @@
 // data: URLs, so the SPA never boots.
 //
 // Usage:
-//   node tools/shot.mjs [path/to/index.html] [outDir]
+//   node tools/shot.mjs [--mobile] [path/to/index.html] [outDir]
 // Defaults: app/static/index.html  ->  ./  (cwd)
+//   --mobile  drives a 390px phone window (below the 760px breakpoint, so
+//             S.mobile boots true) and captures the unified mobile list +
+//             full-bleed story popout instead of the desktop board views.
 //
 // Hooks the SPA exposes for harnessing: window.__RR_DATA__ = {feeds, articles}
 // and ?layout=home|office|board. Force a view at runtime via Runtime.evaluate,
@@ -22,8 +25,11 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const HTML_PATH = process.argv[2] || path.join(here, "..", "app", "static", "index.html");
-const OUTDIR = process.argv[3] || process.cwd();
+const args = process.argv.slice(2);
+const MOBILE = args.includes("--mobile");
+const positional = args.filter(a => !a.startsWith("--"));
+const HTML_PATH = positional[0] || path.join(here, "..", "app", "static", "index.html");
+const OUTDIR = positional[1] || process.cwd();
 const EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const SRV_PORT = 9000 + Math.floor(Math.random() * 900);   // randomised so back-to-back runs don't collide
 const DBG_PORT = 9900 + Math.floor(Math.random() * 90);
@@ -60,8 +66,9 @@ const server = http.createServer((req, res) => { res.writeHead(200, { "Content-T
 await new Promise(r => server.listen(SRV_PORT, r));
 
 const proc = spawn(EDGE, ["--headless=new", "--disable-gpu", "--hide-scrollbars",
-  `--remote-debugging-port=${DBG_PORT}`, "--window-size=1400,900",
-  `http://127.0.0.1:${SRV_PORT}/?layout=board`], { stdio: "ignore" });
+  `--remote-debugging-port=${DBG_PORT}`,
+  MOBILE ? "--window-size=390,844" : "--window-size=1400,900",
+  `http://127.0.0.1:${SRV_PORT}/?layout=${MOBILE ? "home" : "board"}`], { stdio: "ignore" });
 
 async function getTarget() {
   for (let i = 0; i < 60; i++) {
@@ -92,17 +99,24 @@ async function shot(name) {
 }
 async function evalJs(expr) { await cmd("Runtime.evaluate", { expression: expr }); await sleep(250); }
 
-await sleep(1500);                                   // initial board view render
-await shot("1-board");
+await sleep(1500);                                   // initial view render
 
-await evalJs("S.boardFilter=true; render()");        // open the feed picker dropdown
-await shot("2-board-filter-open");
+if (MOBILE) {
+  await shot("m1-list");                             // unified phone list
+  await evalJs("S.storyId=1; S.view='story'; render()");  // full-bleed popout
+  await shot("m2-story");
+} else {
+  await shot("1-board");
 
-await evalJs("S.filter='1'; S.boardFilter=false; render()");  // pick The Verge
-await shot("3-board-filtered-verge");
+  await evalJs("S.boardFilter=true; render()");      // open the feed picker dropdown
+  await shot("2-board-filter-open");
 
-await evalJs("S.filter='all'; S.storyId=1; S.view='story'; render()");  // floating story window
-await shot("4-story-modal");
+  await evalJs("S.filter='1'; S.boardFilter=false; render()");  // pick The Verge
+  await shot("3-board-filtered-verge");
+
+  await evalJs("S.filter='all'; S.storyId=1; S.view='story'; render()");  // floating story window
+  await shot("4-story-modal");
+}
 
 ws.close(); server.close(); proc.kill();
 console.log("done");
