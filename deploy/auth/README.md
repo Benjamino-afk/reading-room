@@ -51,13 +51,15 @@ FUNNEL_HOST=as5404t-6005-1.taild91d92.ts.net ./cognito-setup.sh
    switch it to `http://192.168.1.204:8087`.)
 
 ## Step 3 — Tailscale Funnel (on the NAS, via the container)
-Point Funnel at oauth2-proxy and turn it on — Tailscale is host-network, so
-`127.0.0.1:4180` reaches the oauth2-proxy container's published port:
+Tailscale 1.98+ uses the new serve/funnel CLI: one command, target is just the
+local port. Host-network Tailscale means `4180` reaches oauth2-proxy's port:
 ```bash
-docker exec TailScale tailscale serve --bg --https=443 http://127.0.0.1:4180
-docker exec TailScale tailscale funnel 443 on
+docker exec TailScale tailscale funnel --bg 4180
 docker exec TailScale tailscale funnel status   # should show the public https URL
 ```
+First run may refuse and print a one-click URL to enable Funnel on the tailnet —
+approve it, re-run. `tailscale funnel reset` clears a stale/tailnet-only config.
+(Old CLI `serve --https=443 …` + `funnel 443 on` no longer works.)
 Then open `https://FUNNEL_HOST` from any machine (no Tailscale needed) → Cognito
 login → Reading Room.
 
