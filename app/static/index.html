@@ -11,7 +11,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body { font-family:'Hanken Grotesk',sans-serif; }
-  #app { height: 100vh; display: flex; flex-direction: column; }
+  #app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
   button { font: inherit; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb { background: rgba(120,110,95,0.28); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
@@ -84,6 +84,7 @@ const S = {
   articles: [],
   fullText: true,
   busy: false,
+  mobile: false,        // below the responsive breakpoint? (set on boot + resize)
 };
 
 async function load() {
@@ -134,12 +135,12 @@ function tokens() {
 // so opening an item doesn't snap back to the paper/terracotta look.
 function readingPalette() {
   const {paper, office, board, dark} = tokens();
-  if (S.layout === "office") return {
+  if (!S.mobile && S.layout === "office") return {
     bg: office["--o-pane"], ink: office["--o-ink"], body: office["--o-ink"], sub: office["--o-sub"],
     line: office["--o-line"], accent: office["--o-blue"], accentInk: "#ffffff",
     chipBg: dark ? "#143a2a" : "#eff6ec", chipInk: dark ? "#6cc18d" : "#107c41", chipLine: dark ? "#1f5236" : "#cfe3c4",
   };
-  if (S.layout === "board") return {
+  if (!S.mobile && S.layout === "board") return {
     bg: board["--b-card"], ink: board["--b-ink"], body: board["--b-ink"], sub: board["--b-sub"],
     line: board["--b-line"], accent: board["--b-accent"], accentInk: "#ffffff",
     chipBg: board["--b-chip"], chipInk: board["--b-chipink"], chipLine: board["--b-line"],
@@ -166,7 +167,23 @@ function filterName() {
 }
 
 // ---- header ----------------------------------------------------------------
+// Compact phone header: the Home/Office/Board switch is desktop-only, so on
+// mobile we drop it and keep just the logo + icon chrome (paper-themed).
+function mobileHeaderHTML() {
+  const dark = tokens().dark;
+  const iconBtn = "width:38px;height:38px;border-radius:9px;font-size:15px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;justify-content:center;";
+  return `
+  <div style="flex:0 0 auto;height:56px;display:flex;align-items:center;gap:9px;padding:0 14px;background:var(--card);border-bottom:1px solid var(--line);">
+    <div style="width:24px;height:24px;border-radius:6px;background:var(--accent);box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);flex:0 0 auto;"></div>
+    <span style="font-family:'Newsreader',serif;font-size:20px;font-weight:600;color:var(--ink);letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Reading&nbsp;Room</span>
+    <button data-act="refresh" title="Sync feeds" style="margin-left:auto;${iconBtn}border:1px solid var(--line);background:var(--card);color:var(--muted);">${S.busy ? "…" : "↻"}</button>
+    <button data-act="theme" title="Toggle theme" style="${iconBtn}border:1px solid var(--line);background:var(--card);color:var(--muted);">${dark ? "☾" : "☀"}</button>
+    <button data-act="manager" title="Add feed" style="${iconBtn}border:none;background:var(--accent);color:#fff;font-size:20px;">+</button>
+  </div>`;
+}
+
 function headerHTML() {
+  if (S.mobile) return mobileHeaderHTML();
   const {office, board, dark} = tokens();
   // Header palette follows the active layout so the logo + chrome match the view.
   const h = S.layout === "office"
@@ -484,7 +501,7 @@ function managerHTML() {
       <div style="background:#fffdf8;border-radius:12px;box-shadow:0 2px 10px rgba(40,34,26,0.08);padding:30px 34px 34px;">
         <div style="font-family:'Newsreader',serif;font-size:27px;font-weight:600;color:#2c2722;letter-spacing:-0.01em;margin-bottom:4px;">Manage feeds</div>
         <div style="font-size:13px;color:#8b8275;margin-bottom:24px;">Paste any site or RSS/Atom URL. If a feed only gives summaries, the server follows through and stores the full article.</div>
-        <form data-act="addFeed" style="display:flex;gap:10px;margin-bottom:14px;">
+        <form data-act="addFeed" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
           <div style="flex:1;display:flex;align-items:center;gap:10px;padding:0 14px;height:46px;border:1px solid #ddd4c2;border-radius:11px;background:#fbf6ec;">
             <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#b09e82;">URL</span>
             <input class="url-input" name="url" placeholder="example.com/blog or feed.xml" autocomplete="off">
@@ -551,13 +568,61 @@ function storyHTML() {
   </div>`;
 }
 
+// ---- MOBILE (unified) ------------------------------------------------------
+// One phone layout for all three desktop views: horizontally-scrolling feed
+// chips + a single-column story list; tapping a story opens the full-screen
+// popout. Paper-themed, reusing the shared helpers + data-act handlers.
+function mobileHTML() {
+  const rows = feedRows();
+  const chips = rows.map(f => {
+    const active = String(S.filter) === String(f.id);
+    return `<button data-act="filter" data-feed="${esc(f.id)}" style="flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;border:1px solid ${active ? "var(--accent)" : "var(--line)"};background:${active ? "var(--soft)" : "var(--card)"};color:${active ? "var(--ink)" : "var(--muted)"};font-size:13px;font-weight:${active ? 600 : 500};white-space:nowrap;cursor:pointer;">
+      <span style="width:8px;height:8px;border-radius:50%;background:${esc(f.color)};flex:0 0 auto;"></span>${esc(f.name)}
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:0.8;">${f.unread}</span>
+    </button>`;
+  }).join("");
+
+  const arts = visibleArticles();
+  const items = arts.map(a => {
+    const img = (a.images || [])[0];
+    const thumb = img
+      ? `<div style="flex:0 0 84px;width:84px;height:84px;border-radius:10px;background:#000 center/cover no-repeat url('${esc(img)}');"></div>`
+      : "";
+    return `<article data-act="story" data-id="${a.id}" style="display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line);cursor:pointer;opacity:${a.read ? 0.6 : 1};">
+      <div style="flex:1 1 auto;min-width:0;">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${esc(a.feedColor)};flex:0 0 auto;"></span>
+          <span style="font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.feed)}</span>
+          <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);flex:0 0 auto;">${fmtTime(a.time)}</span>
+        </div>
+        <h3 style="font-family:'Newsreader',serif;font-size:17px;line-height:1.26;margin:0 0 5px;color:var(--ink);font-weight:${a.read ? 480 : 600};">${esc(a.title)}</h3>
+        <p style="font-family:'Spectral',serif;font-size:13.5px;line-height:1.5;color:var(--muted);margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(a.snippet)}</p>
+      </div>
+      ${thumb}
+    </article>`;
+  }).join("");
+
+  const list = arts.length ? items : `<div class="empty">No stories yet. Tap + to add a feed.</div>`;
+
+  return `<div style="flex:1 1 auto;min-width:0;overflow-y:auto;background:var(--paper);">
+    <div style="display:flex;gap:8px;overflow-x:auto;padding:12px 16px;-webkit-overflow-scrolling:touch;">${chips}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 16px 6px;">
+      <span style="font-family:'Newsreader',serif;font-size:21px;font-weight:600;color:var(--ink);letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(filterName())}</span>
+      <button data-act="markAll" style="flex:0 0 auto;padding:6px 11px;border:1px solid var(--line);background:transparent;border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;white-space:nowrap;">Mark all read</button>
+    </div>
+    <div style="padding:0 16px 28px;">${list}</div>
+  </div>`;
+}
+
 // ---- popout modal ----------------------------------------------------------
 // Backdrop closes on click; the inner window carries data-act="modalKeep" so a
 // click on story content resolves there (a no-op) instead of bubbling to close.
 function modalHTML() {
+  // Full-bleed on phones; a floating window on desktop.
+  const m = S.mobile;
   return `
-  <div data-act="back" style="position:fixed;inset:0;z-index:60;background:rgba(15,20,30,0.55);display:flex;align-items:center;justify-content:center;padding:28px;">
-    <div data-act="modalKeep" style="position:relative;width:min(720px,92%);height:min(80vh,860px);border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.45);display:flex;flex-direction:column;">
+  <div data-act="back" style="position:fixed;inset:0;z-index:60;background:rgba(15,20,30,0.55);display:flex;align-items:center;justify-content:center;padding:${m ? "0" : "28px"};">
+    <div data-act="modalKeep" style="position:relative;width:${m ? "100%" : "min(720px,92%)"};height:${m ? "100%" : "min(80vh,860px)"};border-radius:${m ? "0" : "14px"};overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.45);display:flex;flex-direction:column;">
       ${storyHTML()}
     </div>
   </div>`;
@@ -565,6 +630,7 @@ function modalHTML() {
 
 // ---- render ----------------------------------------------------------------
 function readerBodyHTML() {
+  if (S.mobile) return mobileHTML();
   if (S.layout === "office") return officeHTML();
   if (S.layout === "board") return boardHTML();
   return homeHTML();
@@ -682,6 +748,12 @@ document.addEventListener("click", async e => {
 });
 
 // ---- boot ------------------------------------------------------------------
+// Responsive switch: inline styles can't be hit by @media, so the breakpoint
+// lives in state and re-renders the whole tree when it flips.
+const _mq = matchMedia("(max-width: 760px)");
+S.mobile = _mq.matches;
+_mq.addEventListener("change", e => { S.mobile = e.matches; render(); });
+
 load();
 </script>
 </body>
