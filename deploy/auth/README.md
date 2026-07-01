@@ -19,13 +19,16 @@ we do the multi-tenant refactor.
 **Tailscale runs in a container** (`tailscale-docker`, container name `TailScale`,
 host-network) — run all `tailscale ...` commands via `docker exec TailScale ...`.
 
-## Prerequisites (Tailscale admin console — one-time)
-1. **Enable HTTPS certificates** for the tailnet (Settings → Keys/DNS → enable
-   MagicDNS + HTTPS).
-2. **Enable Funnel** for the NAS node: add the `funnel` node attribute in the
-   ACL policy, e.g.
+## Prerequisites (Tailscale — one-time)
+1. **Enable HTTPS certificates** for the tailnet — admin console → DNS page →
+   "Enable HTTPS…" button (needed for the Funnel TLS cert).
+2. **Enable Funnel.** Easiest: just run the `tailscale funnel 443 on` command in
+   step 3 — if it isn't enabled, the CLI prints a one-click URL that grants it.
+   Or add it manually in the ACL editor (https://login.tailscale.com/admin/acls/file).
+   NOTE: `nodeAttrs.target` does NOT accept a bare hostname — use `autogroup:member`
+   (or a tag), not `as5404t-6005-1`:
    ```json
-   "nodeAttrs": [{ "target": ["as5404t-6005-1"], "attr": ["funnel"] }]
+   "nodeAttrs": [{ "target": ["autogroup:member"], "attr": ["funnel"] }]
    ```
 
 ## Step 1 — Cognito — DONE (2026-07-01)
