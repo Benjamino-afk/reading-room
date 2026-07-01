@@ -21,8 +21,8 @@ services:
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
       # from cognito-setup.sh output:
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://cognito-idp.ap-southeast-2.amazonaws.com/REPLACE_POOL_ID
-      OAUTH2_PROXY_CLIENT_ID: REPLACE_CLIENT_ID
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_S4dFr1uaQ
+      OAUTH2_PROXY_CLIENT_ID: 1cs8rkv7aspv5rs4t8bg1llffb
       OAUTH2_PROXY_CLIENT_SECRET: ${CLIENT_SECRET}          # Portainer env
       OAUTH2_PROXY_COOKIE_SECRET: ${COOKIE_SECRET}          # Portainer env (32-byte base64)
       # upstream = Reading Room via the host's published port (docker0 gateway):
@@ -32,7 +32,6 @@ services:
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"             # straight to Cognito login
       OAUTH2_PROXY_EMAIL_DOMAINS: "*"                       # any verified Cognito user
-      # public funnel hostname, e.g. as5404t-6005-1.tailXXXX.ts.net:
-      OAUTH2_PROXY_REDIRECT_URL: https://REPLACE_FUNNEL_HOST/oauth2/callback
-      OAUTH2_PROXY_WHITELIST_DOMAINS: REPLACE_FUNNEL_HOST
-      OAUTH2_PROXY_COOKIE_DOMAINS: REPLACE_FUNNEL_HOST
+      OAUTH2_PROXY_REDIRECT_URL: https://as5404t-6005-1.taild91d92.ts.net/oauth2/callback
+      OAUTH2_PROXY_WHITELIST_DOMAINS: as5404t-6005-1.taild91d92.ts.net
+      OAUTH2_PROXY_COOKIE_DOMAINS: as5404t-6005-1.taild91d92.ts.net

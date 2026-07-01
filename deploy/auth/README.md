@@ -15,6 +15,10 @@ Single-tenant: everyone who logs in shares the same reader. Sized for one user
 (you) for now; adding more Cognito users gives them the *same* feeds until/unless
 we do the multi-tenant refactor.
 
+**Funnel host:** `as5404t-6005-1.taild91d92.ts.net`
+**Tailscale runs in a container** (`tailscale-docker`, container name `TailScale`,
+host-network) — run all `tailscale ...` commands via `docker exec TailScale ...`.
+
 ## Prerequisites (Tailscale admin console — one-time)
 1. **Enable HTTPS certificates** for the tailnet (Settings → Keys/DNS → enable
    MagicDNS + HTTPS).
@@ -23,34 +27,33 @@ we do the multi-tenant refactor.
    ```json
    "nodeAttrs": [{ "target": ["as5404t-6005-1"], "attr": ["funnel"] }]
    ```
-3. Note the node's full funnel hostname — `tailscale status` on the NAS shows it,
-   e.g. `as5404t-6005-1.tailXXXX.ts.net`. **This is `FUNNEL_HOST`, needed below.**
 
-## Step 1 — Cognito (run once, from this box; AWS cli is configured)
+## Step 1 — Cognito — DONE (2026-07-01)
+Pool + client + hosted-UI domain + admin user already created via
+`cognito-setup.sh`. Values are in `Documents\AIwork\Secrets\reading-room-cognito.txt`.
+Re-run only if rebuilding from scratch:
 ```bash
-FUNNEL_HOST=as5404t-6005-1.tailXXXX.ts.net ./cognito-setup.sh
+FUNNEL_HOST=as5404t-6005-1.taild91d92.ts.net ./cognito-setup.sh
 ```
-Copy the four output values (ISSUER_URL, CLIENT_ID, CLIENT_SECRET, hosted-UI
-domain). A temp password is emailed to you for first login.
 
 ## Step 2 — oauth2-proxy stack (Portainer, on the NAS)
-1. New stack `reading-room-auth`, paste `oauth2-proxy.compose.yml`.
-2. Replace the three `REPLACE_*` inline placeholders (POOL_ID, CLIENT_ID,
-   FUNNEL_HOST).
-3. Set stack **env vars** (keeps secrets out of git):
-   - `CLIENT_SECRET` = the Cognito client secret from step 1
-   - `COOKIE_SECRET` = a 32-byte base64 value: `head -c 32 /dev/urandom | base64`
-     (one was generated for you in-session — paste that, or make a fresh one)
-4. Deploy. Verify `http://192.168.1.204:4180` on the LAN bounces to a Cognito
+1. New stack `reading-room-auth`, paste `oauth2-proxy.compose.yml` (POOL_ID,
+   CLIENT_ID and the funnel host are already filled in).
+2. Set stack **env vars** (keeps secrets out of git) — both are in
+   `Documents\AIwork\Secrets\reading-room-cognito.txt`:
+   - `CLIENT_SECRET` = the Cognito client secret
+   - `COOKIE_SECRET` = the 32-byte base64 cookie secret
+3. Deploy. Verify `http://192.168.1.204:4180` on the LAN bounces to a Cognito
    login. (If the upstream `172.17.0.1:8087` doesn't reach Reading Room on ADM,
    switch it to `http://192.168.1.204:8087`.)
 
-## Step 3 — Tailscale Funnel (on the NAS)
-Point Funnel at oauth2-proxy and turn it on:
+## Step 3 — Tailscale Funnel (on the NAS, via the container)
+Point Funnel at oauth2-proxy and turn it on — Tailscale is host-network, so
+`127.0.0.1:4180` reaches the oauth2-proxy container's published port:
 ```bash
-tailscale serve --bg --https=443 http://127.0.0.1:4180
-tailscale funnel 443 on
-tailscale funnel status      # should show the public https URL
+docker exec TailScale tailscale serve --bg --https=443 http://127.0.0.1:4180
+docker exec TailScale tailscale funnel 443 on
+docker exec TailScale tailscale funnel status   # should show the public https URL
 ```
 Then open `https://FUNNEL_HOST` from any machine (no Tailscale needed) → Cognito
 login → Reading Room.
