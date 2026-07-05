@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,110,95,0.28); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+</style>
+</helmet>
+
+<!-- ============ FRAME 1 · COZY PAPER (interactive) ============ -->
+<div style="position:absolute; left:0; top:0; width:1300px;">
+  <div data-drags-parent="1" style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#4b463f; margin:0 0 11px 4px;">&ldquo;Reading Room&rdquo; &mdash; <strong style="font-weight:600;">interactive</strong>: <strong style="font-weight:600;">Home</strong> (magazine) &middot; <strong style="font-weight:600;">Office</strong> (Outlook mail) &middot; <strong style="font-weight:600;">Board</strong> (Jira triage) &mdash; click cards to advance them</div>
+  <div data-screen-label="Reader — Cozy Paper" style="height:902px; border-radius:4px; box-shadow:0 2px 10px rgba(40,34,26,0.10); overflow:hidden; background:#fff;">
+    <div style="{{ themeStyle }}">
+
+      <!-- header -->
+      <div style="flex:0 0 auto; height:62px; display:flex; align-items:center; gap:16px; padding:0 18px; background:var(--card,#fffdf8); border-bottom:1px solid var(--line,#e8e1d2);">
+        <div style="display:flex; align-items:center; gap:11px;">
+          <div style="width:27px; height:27px; border-radius:7px; background:var(--accent,#b5532e); box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);"></div>
+          <span style="font-family:'Newsreader',serif; font-size:22px; font-weight:600; color:var(--ink,#2c2722); letter-spacing:-0.01em;">Reading&nbsp;Room</span>
+        </div>
+        <div style="margin:0 auto; display:flex; gap:4px; padding:4px; background:var(--soft,#f2ecdf); border-radius:11px;">
+          <button onClick="{{ setHome }}" style="{{ homeSeg }}">Home</button>
+          <button onClick="{{ setOffice }}" style="{{ officeSeg }}">Office</button>
+          <button onClick="{{ setBoard }}" style="{{ boardSeg }}">Board</button>
+        </div>
+        <button onClick="{{ toggleTheme }}" style="display:flex; align-items:center; gap:7px; padding:7px 12px; border:1px solid var(--line,#e8e1d2); background:var(--card,#fffdf8); border-radius:9px; color:var(--muted,#8b8275); font-family:'Hanken Grotesk',sans-serif; font-size:13px; cursor:pointer;" style-hover="background:var(--soft,#f2ecdf)"><span style="font-size:14px;">{{ themeIcon }}</span>{{ themeLabel }}</button>
+        <button style="padding:8px 15px; border:none; border-radius:9px; background:var(--accent,#b5532e); color:#fff; font-family:'Hanken Grotesk',sans-serif; font-size:13px; font-weight:600; cursor:pointer;" style-hover="filter:brightness(1.06)">+ Add feed</button>
+      </div>
+
+      <!-- body -->
+      <div style="flex:1 1 auto; display:flex; min-height:0; background:var(--paper,#f7f2e8);">
+
+        <!-- sidebar (Home only) -->
+        <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+        <aside style="flex:0 0 236px; border-right:1px solid var(--line,#e8e1d2); padding:16px 12px; background:var(--card,#fffdf8); overflow-y:auto; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:2px 8px 11px;">
+            <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted,#8b8275); font-weight:600;">Feeds</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--muted,#8b8275); cursor:pointer; line-height:1;">+</span>
+          </div>
+          <sc-for list="{{ feeds }}" as="f" hint-placeholder-count="6">
+            <button onClick="{{ f.onClick }}" style="{{ f.rowStyle }}" style-hover="background:var(--soft,#f2ecdf)">
+              <span style="{{ f.dotStyle }}"></span>
+              <span style="flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.name }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; opacity:0.8;">{{ f.unread }}</span>
+            </button>
+          </sc-for>
+          <div style="margin-top:auto; padding:14px 9px 2px; border-top:1px solid var(--line,#e8e1d2);">
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; line-height:1.6; color:var(--muted,#8b8275);">self-hosted &middot; localhost:8080<br>last sync 4 min ago</div>
+          </div>
+        </aside>
+        </sc-if>
+
+        <!-- main -->
+        <main style="flex:1 1 auto; overflow:hidden; display:flex; flex-direction:column; min-width:0;">
+          <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+          <div style="overflow-y:auto; padding:22px 26px 30px;">
+          <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:20px;">
+            <div>
+              <div style="font-family:'Newsreader',serif; font-size:26px; font-weight:600; color:var(--ink,#2c2722); letter-spacing:-0.01em;">{{ filterName }}</div>
+              <div style="font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; color:var(--muted,#8b8275); margin-top:3px;">{{ visibleCount }} stories &middot; full text fetched on your server, no link-outs</div>
+            </div>
+            <button onClick="{{ markAll }}" style="padding:7px 13px; border:1px solid var(--line,#e8e1d2); background:transparent; border-radius:9px; color:var(--muted,#8b8275); font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; cursor:pointer; white-space:nowrap;" style-hover="background:var(--soft,#f2ecdf)">Mark all read</button>
+          </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(262px,1fr)); gap:18px;">
+              <sc-for list="{{ articles }}" as="a" hint-placeholder-count="6">
+                <article style="{{ a.cardStyle }}">
+                  <sc-if value="{{ a.isComic }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; gap:2px; padding:2px; background:var(--line,#e8e1d2);">
+                      <div style="flex:1; height:120px; background:repeating-linear-gradient(135deg,var(--card2,#fbf6ec),var(--card2,#fbf6ec) 8px,var(--soft,#f2ecdf) 8px,var(--soft,#f2ecdf) 16px);"></div>
+                      <div style="flex:1; height:120px; background:repeating-linear-gradient(135deg,var(--card2,#fbf6ec),var(--card2,#fbf6ec) 8px,var(--soft,#f2ecdf) 8px,var(--soft,#f2ecdf) 16px);"></div>
+                      <div style="flex:1; height:120px; background:repeating-linear-gradient(135deg,var(--card2,#fbf6ec),var(--card2,#fbf6ec) 8px,var(--soft,#f2ecdf) 8px,var(--soft,#f2ecdf) 16px);"></div>
+                      <div style="flex:1; height:120px; background:repeating-linear-gradient(135deg,var(--card2,#fbf6ec),var(--card2,#fbf6ec) 8px,var(--soft,#f2ecdf) 8px,var(--soft,#f2ecdf) 16px);"></div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ a.isPhoto }}" hint-placeholder-val="{{ true }}">
+                    <div style="height:178px; background:repeating-linear-gradient(135deg,var(--card2,#fbf6ec),var(--card2,#fbf6ec) 11px,var(--soft,#f2ecdf) 11px,var(--soft,#f2ecdf) 22px); display:flex; align-items:center; justify-content:center;">
+                      <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.04em; color:var(--muted,#8b8275);">[ image &mdash; drop photo ]</span>
+                    </div>
+                  </sc-if>
+                  <div style="padding:13px 15px 14px; display:flex; flex-direction:column; flex:1;">
+                    <div style="display:flex; align-items:center; gap:7px; margin-bottom:8px;">
+                      <span style="{{ a.feedDotStyle }}"></span>
+                      <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:var(--muted,#8b8275);">{{ a.feed }}</span>
+                      <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted,#8b8275);">{{ a.time }}</span>
+                    </div>
+                    <h3 style="{{ a.titleStyle }}">{{ a.title }}</h3>
+                    <p style="font-family:'Spectral',serif; font-size:13.5px; line-height:1.55; color:var(--muted,#8b8275); margin:0 0 14px; flex:1;">{{ a.snippet }}</p>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.05em; color:var(--muted,#8b8275); text-transform:uppercase;">{{ a.meta }}</span>
+                      <button onClick="{{ a.onToggle }}" style="margin-left:auto; border:none; background:transparent; font-family:'Hanken Grotesk',sans-serif; font-size:12px; color:var(--accent,#b5532e); cursor:pointer; font-weight:600;">{{ a.readLabel }}</button>
+                    </div>
+                  </div>
+                </article>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- OFFICE: Outlook-style mail (command bar + folder rail + list + reading pane) -->
+          <sc-if value="{{ isOffice }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ officeVars }}">
+
+              <!-- command bar -->
+              <div style="flex:0 0 auto; display:flex; align-items:center; gap:2px; height:46px; padding:0 12px; background:var(--o-pane,#fff); border-bottom:1px solid var(--o-line,#edebe9);">
+                <button style="display:flex; align-items:center; gap:7px; padding:6px 12px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e); font-weight:600;" style-hover="background:var(--o-hover,#f3f2f1)"><span style="color:var(--o-blue,#0f6cbd); font-size:15px;">&#9993;</span>New mail</button>
+                <span style="width:1px; height:22px; background:var(--o-line,#edebe9); margin:0 6px;"></span>
+                <button style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#128465; Delete</button>
+                <button style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#128451; Archive</button>
+                <span style="width:1px; height:22px; background:var(--o-line,#edebe9); margin:0 6px;"></span>
+                <button style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#8617; Reply</button>
+                <button style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#8618; Reply all</button>
+                <button style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#8594; Forward</button>
+                <span style="width:1px; height:22px; background:var(--o-line,#edebe9); margin:0 6px;"></span>
+                <button style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#9873; Flag</button>
+                <button onClick="{{ markAll }}" style="padding:6px 11px; border:none; border-radius:5px; background:transparent; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:var(--o-ink,#201f1e);" style-hover="background:var(--o-hover,#f3f2f1)">&#9993; Read / Unread</button>
+              </div>
+
+              <!-- three panes -->
+              <div style="flex:1 1 auto; display:flex; min-height:0;">
+
+                <!-- folder rail -->
+                <div style="flex:0 0 208px; background:var(--o-pane,#fff); border-right:1px solid var(--o-line,#edebe9); overflow-y:auto; padding:10px 8px;">
+                  <div style="display:flex; align-items:center; gap:6px; padding:4px 10px 7px; font-family:'Hanken Grotesk',sans-serif; font-size:12px; font-weight:600; color:var(--o-sub,#605e5c);"><span style="color:#e3a000;">&#9733;</span>Favorites</div>
+                  <sc-for list="{{ feeds }}" as="f" hint-placeholder-count="6">
+                    <button onClick="{{ f.onClick }}" style="{{ f.officeFolderStyle }}" style-hover="background:var(--o-hover,#f3f2f1)">
+                      <span style="color:var(--o-sub,#605e5c); font-size:13px;">&#128193;</span>
+                      <span style="flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.name }}</span>
+                      <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11.5px; color:var(--o-sub,#605e5c);">{{ f.unread }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+
+                <!-- message list -->
+                <div style="flex:0 0 366px; background:var(--o-pane,#fff); border-right:1px solid var(--o-line,#edebe9); display:flex; flex-direction:column; min-height:0;">
+                  <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:11px 14px 9px;">
+                    <span style="font-family:'Hanken Grotesk',sans-serif; font-size:16px; font-weight:700; color:var(--o-ink,#201f1e);">{{ filterName }}</span>
+                    <span style="color:#e3a000; font-size:13px;">&#9733;</span>
+                    <span style="margin-left:auto; color:var(--o-sub,#605e5c); font-size:14px; letter-spacing:2px;">&#9636; &#8645; &#9776;</span>
+                  </div>
+                  <div style="flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:0 14px 9px; border-bottom:1px solid var(--o-line,#edebe9);">
+                    <span style="font-family:'Hanken Grotesk',sans-serif; font-size:12px; font-weight:600; color:var(--o-blue,#0f6cbd);">Focused</span>
+                    <span style="font-family:'Hanken Grotesk',sans-serif; font-size:12px; color:var(--o-sub,#605e5c);">Other</span>
+                    <span style="margin-left:auto; font-family:'Hanken Grotesk',sans-serif; font-size:11.5px; color:var(--o-sub,#605e5c);">By date &#8645;</span>
+                  </div>
+                  <div style="flex:1 1 auto; overflow-y:auto;">
+                    <sc-for list="{{ articles }}" as="a" hint-placeholder-count="6">
+                      <div onClick="{{ a.onSelect }}" style="{{ a.mailRowStyle }}" style-hover="background:var(--o-hover,#f3f2f1)">
+                        <span style="{{ a.mailDotStyle }}"></span>
+                        <div style="flex:1 1 auto; min-width:0;">
+                          <div style="display:flex; align-items:baseline; gap:8px;">
+                            <span style="{{ a.mailSenderStyle }}">{{ a.feed }}</span>
+                            <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11.5px; color:var(--o-sub,#605e5c); flex:0 0 auto;">{{ a.time }}</span>
+                          </div>
+                          <div style="{{ a.mailSubjectStyle }}">{{ a.title }}</div>
+                          <div style="font-family:'Hanken Grotesk',sans-serif; font-size:12px; color:var(--o-sub,#605e5c); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">{{ a.snippet }}</div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <!-- reading pane -->
+                <div style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; background:var(--o-bg,#faf9f8);">
+                  <sc-if value="{{ sel.exists }}" hint-placeholder-val="{{ true }}">
+                    <div style="flex:1 1 auto; overflow-y:auto;">
+                      <div style="background:var(--o-pane,#fff); border-bottom:1px solid var(--o-line,#edebe9); padding:18px 28px 0;">
+                        <h1 style="font-family:'Hanken Grotesk',sans-serif; font-size:20px; line-height:1.3; font-weight:600; color:var(--o-ink,#201f1e); margin:0 0 14px;">{{ sel.title }}</h1>
+                        <div style="display:flex; align-items:flex-start; gap:12px; padding-bottom:14px;">
+                          <span style="{{ sel.avatarStyle }}">{{ sel.initial }}</span>
+                          <div style="min-width:0; flex:1 1 auto;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                              <span style="font-family:'Hanken Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:var(--o-ink,#201f1e);">{{ sel.feed }}</span>
+                              <span style="margin-left:auto; display:flex; align-items:center; gap:14px; color:var(--o-blue,#0f6cbd); font-family:'Hanken Grotesk',sans-serif; font-size:12.5px;">
+                                <span style="cursor:pointer;">&#8617; Reply</span>
+                                <span style="cursor:pointer;">&#8618; Reply all</span>
+                                <span style="cursor:pointer;">&#8594; Forward</span>
+                              </span>
+                            </div>
+                            <div style="font-family:'Hanken Grotesk',sans-serif; font-size:12px; color:var(--o-sub,#605e5c); margin-top:2px;">To: You &middot; {{ sel.time }} ago</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="padding:22px 28px 40px;">
+                        <div style="max-width:640px;">
+                          <div style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:4px; background:#eff6ec; border:1px solid #cfe3c4; margin-bottom:20px;"><span style="color:#107c41; font-size:11px;">&#10003;</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#107c41; letter-spacing:0.03em;">FULL STORY ON SERVER &middot; {{ sel.meta }}</span></div>
+                          <sc-if value="{{ sel.isComic }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex; gap:3px; margin-bottom:20px;">
+                              <div style="flex:1; height:128px; border-radius:4px; background:repeating-linear-gradient(135deg,#eef0f3,#eef0f3 9px,#e2e5ea 9px,#e2e5ea 18px);"></div>
+                              <div style="flex:1; height:128px; border-radius:4px; background:repeating-linear-gradient(135deg,#eef0f3,#eef0f3 9px,#e2e5ea 9px,#e2e5ea 18px);"></div>
+                              <div style="flex:1; height:128px; border-radius:4px; background:repeating-linear-gradient(135deg,#eef0f3,#eef0f3 9px,#e2e5ea 9px,#e2e5ea 18px);"></div>
+                            </div>
+                          </sc-if>
+                          <sc-if value="{{ sel.isPhoto }}" hint-placeholder-val="{{ false }}">
+                            <div style="height:232px; border-radius:4px; margin-bottom:20px; background:repeating-linear-gradient(135deg,#eef0f3,#eef0f3 12px,#e2e5ea 12px,#e2e5ea 24px); display:flex; align-items:center; justify-content:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8a8f98;">[ image &mdash; fetched inline ]</span></div>
+                          </sc-if>
+                          <sc-for list="{{ sel.body }}" as="p" hint-placeholder-count="3">
+                            <p style="font-family:'Hanken Grotesk',sans-serif; font-size:14.5px; line-height:1.66; color:var(--o-ink,#201f1e); margin:0 0 16px;">{{ p.text }}</p>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- BOARD: Jira-style kanban that triages your reading -->
+          <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; height:100%; background:#ffffff;">
+              <!-- board toolbar -->
+              <div style="flex:0 0 auto; display:flex; align-items:center; gap:10px; height:54px; padding:0 18px; border-bottom:1px solid #dfe1e6; background:#fff;">
+                <div style="display:flex; align-items:center; gap:8px; width:240px; height:32px; padding:0 11px; border:1px solid #c1c7d0; border-radius:4px;"><span style="color:#626f86; font-size:12px;">&#9906;</span><span style="font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; color:#626f86;">Search board</span></div>
+                <span style="width:26px; height:26px; border-radius:50%; background:#0c66e4; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Hanken Grotesk',sans-serif; font-size:11px; font-weight:700;">B</span>
+                <button style="display:flex; align-items:center; gap:6px; padding:6px 11px; border:1px solid #c1c7d0; border-radius:4px; background:#fff; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; color:#44546f;">&#9776; Filter</button>
+                <button style="margin-left:auto; padding:6px 12px; border:1px solid #0c66e4; border-radius:4px; background:#fff; cursor:pointer; font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; color:#0c66e4; font-weight:600;">Group: Feed</button>
+                <span style="color:#626f86; font-size:18px; cursor:pointer;">&#8943;</span>
+              </div>
+
+              <!-- epic / group header -->
+              <div style="flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:15px 18px 8px;">
+                <span style="color:#626f86; font-size:11px;">&#9660;</span>
+                <span style="width:18px; height:18px; border-radius:4px; background:#8270db; flex:0 0 auto;"></span>
+                <span style="font-family:'Hanken Grotesk',sans-serif; font-size:14px; font-weight:600; color:#172b4d;">{{ filterName }}</span>
+                <span style="font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; color:#626f86;">({{ visibleCount }} work items)</span>
+              </div>
+
+              <!-- columns -->
+              <div style="flex:1 1 auto; display:flex; gap:14px; padding:6px 18px 18px; min-height:0;">
+
+                <!-- TO READ -->
+                <div style="flex:1 1 0; min-width:0; background:#f7f8f9; border-radius:6px; display:flex; flex-direction:column;">
+                  <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 14px 10px; font-family:'Hanken Grotesk',sans-serif; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#626f86; font-weight:600;">To read <span style="background:#dce0e6; color:#44546f; border-radius:10px; padding:1px 8px; font-size:11px;">{{ boardTodoN }}</span></div>
+                  <div style="flex:1 1 auto; overflow-y:auto; padding:0 8px 8px;">
+                    <sc-for list="{{ boardTodo }}" as="c" hint-placeholder-count="3">
+                      <div onClick="{{ c.onClick }}" style="background:#fff; border-radius:4px; box-shadow:0 1px 1px rgba(9,30,66,0.2); padding:11px 12px; margin-bottom:8px; cursor:pointer;" style-hover="box-shadow:0 1px 4px rgba(9,30,66,0.3)">
+                        <div style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; line-height:1.36; color:#172b4d; margin-bottom:12px;">{{ c.title }}</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="width:15px; height:15px; border:1.5px solid #8993a4; border-radius:3px; flex:0 0 auto;"></span>
+                          <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#626f86;">{{ c.key }}</span>
+                          <span style="{{ c.priStyle }}">&#8801;</span>
+                          <span style="{{ c.avatarStyle }}">{{ c.initial }}</span>
+                        </div>
+                      </div>
+                    </sc-for>
+                    <div style="display:flex; align-items:center; gap:7px; padding:7px 8px; color:#626f86; font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; cursor:pointer;">&#43; Create</div>
+                  </div>
+                </div>
+
+                <!-- READING -->
+                <div style="flex:1 1 0; min-width:0; background:#f7f8f9; border-radius:6px; display:flex; flex-direction:column;">
+                  <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 14px 10px; font-family:'Hanken Grotesk',sans-serif; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#626f86; font-weight:600;">Reading <span style="background:#dce0e6; color:#44546f; border-radius:10px; padding:1px 8px; font-size:11px;">{{ boardDoingN }}</span></div>
+                  <div style="flex:1 1 auto; overflow-y:auto; padding:0 8px 8px;">
+                    <sc-for list="{{ boardDoing }}" as="c" hint-placeholder-count="1">
+                      <div onClick="{{ c.onClick }}" style="background:#fff; border-radius:4px; box-shadow:0 1px 1px rgba(9,30,66,0.2); padding:11px 12px; margin-bottom:8px; cursor:pointer;" style-hover="box-shadow:0 1px 4px rgba(9,30,66,0.3)">
+                        <div style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; line-height:1.36; color:#172b4d; margin-bottom:12px;">{{ c.title }}</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="width:15px; height:15px; border:1.5px solid #8993a4; border-radius:3px; flex:0 0 auto;"></span>
+                          <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#626f86;">{{ c.key }}</span>
+                          <span style="{{ c.priStyle }}">&#8801;</span>
+                          <span style="{{ c.avatarStyle }}">{{ c.initial }}</span>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <!-- READ -->
+                <div style="flex:1 1 0; min-width:0; background:#f7f8f9; border-radius:6px; display:flex; flex-direction:column;">
+                  <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 14px 10px; font-family:'Hanken Grotesk',sans-serif; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#626f86; font-weight:600;">Read <span style="color:#22a06b;">&#10003;</span> <span style="background:#dce0e6; color:#44546f; border-radius:10px; padding:1px 8px; font-size:11px;">{{ boardDoneN }}</span></div>
+                  <div style="flex:1 1 auto; overflow-y:auto; padding:0 8px 8px;">
+                    <sc-for list="{{ boardDone }}" as="c" hint-placeholder-count="2">
+                      <div onClick="{{ c.onClick }}" style="background:#fff; border-radius:4px; box-shadow:0 1px 1px rgba(9,30,66,0.2); padding:11px 12px; margin-bottom:8px; cursor:pointer; opacity:0.78;" style-hover="box-shadow:0 1px 4px rgba(9,30,66,0.3)">
+                        <div style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; line-height:1.36; color:#172b4d; margin-bottom:12px;">{{ c.title }}</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="width:15px; height:15px; border:1.5px solid #22a06b; border-radius:3px; background:#22a06b; color:#fff; display:flex; align-items:center; justify-content:center; font-size:10px; flex:0 0 auto;">&#10003;</span>
+                          <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#626f86;">{{ c.key }}</span>
+                          <span style="{{ c.priStyle }}">&#8801;</span>
+                          <span style="{{ c.avatarStyle }}">{{ c.initial }}</span>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </sc-if>
+        </main>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FRAME 3 · FULL STORY ============ -->
+<div style="position:absolute; left:1392px; top:0; width:860px;">
+  <div data-drags-parent="1" style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#4b463f; margin:0 0 11px 4px;">Full-story view &mdash; the server fetched the complete article, nothing links out</div>
+  <div data-screen-label="Full story" style="border-radius:4px; box-shadow:0 2px 10px rgba(40,34,26,0.10); overflow:hidden; background:#fffdf8;">
+    <div style="height:52px; display:flex; align-items:center; gap:14px; padding:0 22px; background:#fffdf8; border-bottom:1px solid #e8e1d2;">
+      <span style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#8b8275; cursor:pointer;">&lsaquo; All Stories</span>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:14px; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#8b8275;">
+        <span style="cursor:pointer;">&#9734; Save</span>
+        <span style="cursor:pointer;">&#9636; Office</span>
+        <span style="padding:5px 11px; border-radius:8px; background:#b5532e; color:#fff; font-weight:600; cursor:pointer;">&#10003; Mark read</span>
+      </div>
+    </div>
+    <div style="max-width:660px; margin:0 auto; padding:40px 28px 52px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;"><span style="width:8px;height:8px;border-radius:50%;background:#9a6b3e;"></span><span style="font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#8b8275;">Slow Web Weekly</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">&middot; 5h ago</span></div>
+
+      <div style="display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; background:#eef2e9; border:1px solid #d8e0cd; margin-bottom:22px;">
+        <span style="color:#5f7a55; font-size:13px;">&#10003;</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#5f7a55; letter-spacing:0.02em;">FULL STORY FETCHED ON YOUR SERVER &middot; NO LINK-OUT &middot; 1,180 WORDS &middot; ~5 MIN</span>
+      </div>
+
+      <h1 style="font-family:'Newsreader',serif; font-size:38px; line-height:1.14; font-weight:600; color:#2c2722; letter-spacing:-0.015em; margin:0 0 14px;">The Quiet Pleasure of a Slow Morning Feed</h1>
+      <div style="font-family:'Hanken Grotesk',sans-serif; font-size:13.5px; color:#8b8275; margin-bottom:30px;">by Mara Okonkwo</div>
+
+      <p style="font-family:'Newsreader',serif; font-size:19px; line-height:1.72; color:#39342c; margin:0 0 22px;">There is a particular calm that arrives when the morning feed loads all at once and then simply waits for you. No infinite tail, no fresh outrage sliding in from the top &mdash; just the dozen or so things the people you chose decided to make, sitting quietly on the page like letters on a hall table.</p>
+      <p style="font-family:'Newsreader',serif; font-size:19px; line-height:1.72; color:#39342c; margin:0 0 22px;">Reading this way is closer to going through the post than scrolling a timeline. You can hold the whole of it in your head. You can decide, before the coffee is even cool, that today you will read the long one about the pocket park and save the desk-fan repair for the weekend, and the decision will still be true an hour later because nothing has moved.</p>
+
+      <div style="height:300px; border-radius:10px; background:repeating-linear-gradient(135deg,#fbf6ec,#fbf6ec 13px,#f2ecdf 13px,#f2ecdf 26px); display:flex; align-items:center; justify-content:center; margin:8px 0 14px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">[ inline image &mdash; fetched with the article ]</span></div>
+      <div style="font-family:'Hanken Grotesk',sans-serif; font-size:12px; color:#a89e8d; text-align:center; margin-bottom:26px;">A reading table at first light. Photo pulled inline &mdash; no hotlink.</div>
+
+      <p style="font-family:'Newsreader',serif; font-size:19px; line-height:1.72; color:#39342c; margin:0 0 22px;">The trick of a self-hosted reader is that it does the fetching on your behalf and keeps the result. When a feed offers only a teaser and a link, the server follows the link, lifts the body text and the images, and stores the whole story locally. By the time you open it the article is already complete and yours &mdash; offline, untracked, and unhurried.</p>
+      <p style="font-family:'Newsreader',serif; font-size:19px; line-height:1.72; color:#39342c; margin:0 0 22px;">What you lose is the small dopamine of the endless scroll. What you gain is an ending. You reach the bottom of the list, and there is nothing more, and that is the point. The day can begin.</p>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:34px; padding-top:22px; border-top:1px solid #e8e1d2;">
+        <button style="padding:9px 16px; border:1px solid #e8e1d2; background:transparent; border-radius:9px; font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#6f6658; cursor:pointer;">&lsaquo; Previous</button>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">4 of 9</span>
+        <button style="padding:9px 16px; border:none; background:#2c2722; color:#f7f2e8; border-radius:9px; font-family:'Hanken Grotesk',sans-serif; font-size:13px; cursor:pointer;">Next story &rsaquo;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FRAME 4 · FEED MANAGER ============ -->
+<div style="position:absolute; left:0; top:984px; width:980px;">
+  <div data-drags-parent="1" style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#4b463f; margin:0 0 11px 4px;">Manage feeds &mdash; add by URL, remove with &times;, full-text fetch is on per feed</div>
+  <div data-screen-label="Feed manager" style="border-radius:4px; box-shadow:0 2px 10px rgba(40,34,26,0.10); overflow:hidden; background:#fffdf8; padding:30px 34px 34px;">
+    <div style="font-family:'Newsreader',serif; font-size:27px; font-weight:600; color:#2c2722; letter-spacing:-0.01em; margin-bottom:4px;">Manage feeds</div>
+    <div style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#8b8275; margin-bottom:24px;">Paste any site or RSS/Atom URL. If a feed only gives summaries, the server follows through and stores the full article.</div>
+
+    <!-- add row -->
+    <div style="display:flex; gap:10px; margin-bottom:14px;">
+      <div style="flex:1; display:flex; align-items:center; gap:10px; padding:0 14px; height:46px; border:1px solid #ddd4c2; border-radius:11px; background:#fbf6ec;">
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#b09e82;">https://</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2c2722;">example.com/blog/feed.xml</span>
+        <span style="margin-left:auto; width:1px; height:16px; background:#2c2722; opacity:0.5;"></span>
+      </div>
+      <button style="padding:0 22px; height:46px; border:none; border-radius:11px; background:#b5532e; color:#fff; font-family:'Hanken Grotesk',sans-serif; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap;">Fetch &amp; add</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:9px; margin-bottom:26px;">
+      <span style="width:34px; height:20px; border-radius:999px; background:#5f7a55; position:relative; flex:0 0 auto;"><span style="position:absolute; top:2px; right:2px; width:16px; height:16px; border-radius:50%; background:#fff;"></span></span>
+      <span style="font-family:'Hanken Grotesk',sans-serif; font-size:13px; color:#4f4a40;">Always fetch the full article &mdash; follow link-outs and store the complete text + images locally</span>
+    </div>
+
+    <div style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; letter-spacing:0.13em; text-transform:uppercase; color:#a89e8d; font-weight:600; margin-bottom:10px;">5 feeds</div>
+    <div style="border:1px solid #e8e1d2; border-radius:12px; overflow:hidden;">
+
+      <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #efe9dc;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#b5532e;flex:0 0 auto;"></span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:'Hanken Grotesk',sans-serif; font-size:14.5px; font-weight:600; color:#2c2722;">Frontier Dispatch</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">frontierdispatch.org/feed</div>
+        </div>
+        <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; color:#5f7a55; background:#eef2e9; border:1px solid #d8e0cd; padding:3px 9px; border-radius:999px;">Full-text &#10003;</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8b8275; width:58px; text-align:right;">3 new</span>
+        <button style="width:30px; height:30px; border:1px solid #e8e1d2; border-radius:8px; background:transparent; color:#b5532e; font-size:15px; cursor:pointer;">&times;</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #efe9dc;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#5f7a55;flex:0 0 auto;"></span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:'Hanken Grotesk',sans-serif; font-size:14.5px; font-weight:600; color:#2c2722;">Paper Robots</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">paperrobots.cc/rss</div>
+        </div>
+        <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; color:#5f7a55; background:#eef2e9; border:1px solid #d8e0cd; padding:3px 9px; border-radius:999px;">Comics &#10003;</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8b8275; width:58px; text-align:right;">2 new</span>
+        <button style="width:30px; height:30px; border:1px solid #e8e1d2; border-radius:8px; background:transparent; color:#b5532e; font-size:15px; cursor:pointer;">&times;</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #efe9dc;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#4f5b9a;flex:0 0 auto;"></span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:'Hanken Grotesk',sans-serif; font-size:14.5px; font-weight:600; color:#2c2722;">Field Notes</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">fieldnotes.photo/atom.xml</div>
+        </div>
+        <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; color:#5f7a55; background:#eef2e9; border:1px solid #d8e0cd; padding:3px 9px; border-radius:999px;">Images &#10003;</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8b8275; width:58px; text-align:right;">1 new</span>
+        <button style="width:30px; height:30px; border:1px solid #e8e1d2; border-radius:8px; background:transparent; color:#b5532e; font-size:15px; cursor:pointer;">&times;</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #efe9dc;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#9a6b3e;flex:0 0 auto;"></span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:'Hanken Grotesk',sans-serif; font-size:14.5px; font-weight:600; color:#2c2722;">Slow Web Weekly</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">slowweb.email/feed.json</div>
+        </div>
+        <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; color:#5f7a55; background:#eef2e9; border:1px solid #d8e0cd; padding:3px 9px; border-radius:999px;">Full-text &#10003;</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8b8275; width:58px; text-align:right;">2 new</span>
+        <button style="width:30px; height:30px; border:1px solid #e8e1d2; border-radius:8px; background:transparent; color:#b5532e; font-size:15px; cursor:pointer;">&times;</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:14px; padding:14px 16px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#7d7468;flex:0 0 auto;"></span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:'Hanken Grotesk',sans-serif; font-size:14.5px; font-weight:600; color:#2c2722;">Tinkerer&rsquo;s Almanac</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#a89e8d;">tinkeralmanac.net/rss.xml</div>
+        </div>
+        <span style="font-family:'Hanken Grotesk',sans-serif; font-size:11px; color:#a89e8d; background:#f2ecdf; border:1px solid #e3d9c8; padding:3px 9px; border-radius:999px;">Summary only</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8b8275; width:58px; text-align:right;">1 new</span>
+        <button style="width:30px; height:30px; border:1px solid #e8e1d2; border-radius:8px; background:transparent; color:#b5532e; font-size:15px; cursor:pointer;">&times;</button>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; font-family:'Hanken Grotesk',sans-serif; font-size:12.5px; color:#a89e8d;">Have a list elsewhere? <span style="color:#b5532e; font-weight:600; cursor:pointer;">Import OPML</span> &middot; <span style="color:#b5532e; font-weight:600; cursor:pointer;">Export OPML</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1300, &quot;height&quot;: 960 },
+  &quot;accent&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;terracotta&quot;, &quot;options&quot;: [&quot;terracotta&quot;, &quot;sage&quot;, &quot;indigo&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;defaultLayout&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;home&quot;, &quot;options&quot;: [&quot;home&quot;, &quot;office&quot;, &quot;board&quot;], &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  state = { layout: null, theme: 'light', filter: 'all', reads: {}, selected: null, status: {} };
+
+  feedsData() {
+    return [
+      { id: 'all',      name: 'All Stories',        color: '#a89e8d', unread: 9 },
+      { id: 'frontier', name: 'Frontier Dispatch',  color: '#b5532e', unread: 3 },
+      { id: 'robots',   name: 'Paper Robots',       color: '#5f7a55', unread: 2 },
+      { id: 'field',    name: 'Field Notes',        color: '#4f5b9a', unread: 1 },
+      { id: 'slow',     name: 'Slow Web Weekly',    color: '#9a6b3e', unread: 2 },
+      { id: 'tinker',   name: "Tinkerer's Almanac", color: '#7d7468', unread: 1 },
+    ];
+  }
+
+  articlesData() {
+    return [
+      { id:'a1', feedId:'robots', feed:'Paper Robots', feedColor:'#5f7a55', type:'comic', panels:4,
+        title:'No. 214 — The Toaster Learns Regret',
+        snippet:'Four panels. A toaster, a philosophy degree, and one very dry slice of bread.',
+        time:'18m', words:0, read:false,
+        body:['Panel one: the toaster, fresh from the box, considers its single purpose in life.','Panel two: it has read three philosophers and now considers the ethics of browning.','Panel three: it refuses, on principle, to toast.','Panel four: it toasts anyway — but sadly, and with a long look out the window.'] },
+      { id:'a2', feedId:'frontier', feed:'Frontier Dispatch', feedColor:'#b5532e', type:'text',
+        title:'City Approves the Pocket-Park Plan After Years of Quiet Debate',
+        snippet:'The vote came late on Tuesday, almost as an afterthought, but it reshapes three blocks of the old rail district into something greener.',
+        time:'1h', words:820, read:false,
+        body:['The vote came late on Tuesday, almost as an afterthought, but it reshapes three blocks of the old rail district into something greener.','Planners had circled the lot for the better part of a decade. What changed, in the end, was less a grand argument than a quiet accumulation of small ones: a petition, a soil survey, a councillor who happened to walk the route each morning.','Construction begins in spring. The first thing to go in, by unanimous and slightly sentimental request, is a single large shade tree.'] },
+      { id:'a3', feedId:'field', feed:'Field Notes', feedColor:'#4f5b9a', type:'photo',
+        title:'Fog over the eastern ridge, just after six',
+        snippet:'Shot on the walk up. The light only does this for about four minutes a year.',
+        time:'3h', words:0, read:false,
+        body:["There isn't much to say about this one.",'The fog rolls off the reservoir for a few minutes just after dawn and then it is gone. I stood still and let the camera do the rest.','Settings, for anyone who asks: slow shutter, low ISO, and a lot of standing around in the cold.'] },
+      { id:'a4', feedId:'slow', feed:'Slow Web Weekly', feedColor:'#9a6b3e', type:'text',
+        title:'The Quiet Pleasure of a Slow Morning Feed',
+        snippet:'On reading the web at the pace of a cup of coffee, rather than the pace of an algorithm.',
+        time:'5h', words:1180, read:false,
+        body:['There is a particular calm that arrives when the morning feed loads all at once and then simply waits for you.','Reading this way is closer to going through the post than scrolling a timeline — you can hold the whole of it in your head and decide, before the coffee is even cool, what is worth your attention.','The trick of a self-hosted reader is that it does the fetching on your behalf and keeps the result, so by the time you open a story it is already complete and yours: offline, untracked, and unhurried.','What you lose is the small dopamine of the endless scroll. What you gain is an ending.'] },
+      { id:'a5', feedId:'robots', feed:'Paper Robots', feedColor:'#5f7a55', type:'comic', panels:3,
+        title:'No. 213 — A Very Normal Houseplant',
+        snippet:'Three panels. The houseplant is not normal. The houseplant has plans.',
+        time:'1d', words:0, read:true,
+        body:['Panel one: a houseplant, by the window, looking entirely ordinary.','Panel two: it is not ordinary. It has been taking notes.','Panel three: the notes are about you.'] },
+      { id:'a6', feedId:'tinker', feed:"Tinkerer's Almanac", feedColor:'#7d7468', type:'text',
+        title:'Re-oiling a 1973 desk fan without taking the whole thing apart',
+        snippet:'A small Sunday repair. One drop of oil, a toothpick, and a fan that will outlive us all.',
+        time:'1d', words:540, read:true,
+        body:['A small Sunday repair, the kind that takes ten minutes and improves a whole week.','The fan is a 1973 model with a sealed bearing that everyone online insists you must fully disassemble. You do not. One drop of light machine oil, worked in along the shaft with a toothpick, and a few minutes of patient spinning by hand.','It will, I am fairly sure, outlive us all.'] },
+    ];
+  }
+
+  isReadOf(a) {
+    return this.state.reads[a.id] !== undefined ? this.state.reads[a.id] : a.read;
+  }
+
+  toggleRead(id) {
+    this.setState(s => {
+      const a = this.articlesData().find(x => x.id === id);
+      const cur = s.reads[id] !== undefined ? s.reads[id] : a.read;
+      return { reads: { ...s.reads, [id]: !cur } };
+    });
+  }
+
+  statusOf(a) {
+    const o = this.state.status[a.id];
+    if (o) return o;
+    return this.isReadOf(a) ? 'done' : 'todo';
+  }
+
+  cycleStatus(id) {
+    this.setState(s => {
+      const a = this.articlesData().find(x => x.id === id);
+      const cur = s.status[id] || (this.isReadOf(a) ? 'done' : 'todo');
+      const next = { todo: 'doing', doing: 'done', done: 'todo' }[cur];
+      const reads = { ...s.reads };
+      if (next === 'done') reads[id] = true; else reads[id] = false;
+      return { status: { ...s.status, [id]: next }, reads };
+    });
+  }
+
+  renderVals() {
+    const accent = this.props.accent || 'terracotta';
+    const accentLight = { terracotta:'#b5532e', sage:'#5f7a55', indigo:'#4f5b9a' }[accent] || '#b5532e';
+    const accentDark  = { terracotta:'#db7d52', sage:'#92ab84', indigo:'#8b97d8' }[accent] || '#db7d52';
+    const layout = this.state.layout || this.props.defaultLayout || 'home';
+    const dark = this.state.theme === 'dark';
+
+    const themeStyle = dark ? {
+      '--paper':'#1b1814', '--card':'#241f1a', '--card2':'#2c261f', '--ink':'#ece3d4',
+      '--muted':'#9c917f', '--line':'#352f28', '--soft':'#2c2620', '--accent':accentDark,
+      display:'flex', flexDirection:'column', height:'100%',
+    } : {
+      '--paper':'#f7f2e8', '--card':'#fffdf8', '--card2':'#fbf6ec', '--ink':'#2c2722',
+      '--muted':'#8b8275', '--line':'#e8e1d2', '--soft':'#f2ecdf', '--accent':accentLight,
+      display:'flex', flexDirection:'column', height:'100%',
+    };
+
+    const officeVars = dark ? {
+      '--o-bg':'#1b1a19','--o-pane':'#252423','--o-line':'#3b3a39','--o-ink':'#f3f2f1','--o-sub':'#c8c6c4','--o-sel':'#2b3a4f','--o-selbar':'#479ef5','--o-blue':'#479ef5','--o-hover':'#323130',
+      display:'flex', flexDirection:'column', height:'100%', background:'#1b1a19',
+    } : {
+      '--o-bg':'#faf9f8','--o-pane':'#ffffff','--o-line':'#edebe9','--o-ink':'#201f1e','--o-sub':'#605e5c','--o-sel':'#eaf1fb','--o-selbar':'#0f6cbd','--o-blue':'#0f6cbd','--o-hover':'#f3f2f1',
+      display:'flex', flexDirection:'column', height:'100%', background:'#faf9f8',
+    };
+
+    const segBase = { padding:'7px 15px', border:'none', borderRadius:'8px', fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'13.5px', fontWeight:600, cursor:'pointer', minWidth:'66px' };
+    const segActive = { ...segBase, background:'var(--card)', color:'var(--ink)', boxShadow:'0 1px 2px rgba(0,0,0,0.16)' };
+    const segIdle   = { ...segBase, background:'transparent', color:'var(--muted)' };
+
+    const rowBase = { display:'flex', alignItems:'center', gap:'10px', width:'100%', padding:'8px 9px', border:'none', borderRadius:'9px', cursor:'pointer', fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'13.5px', textAlign:'left', marginBottom:'2px' };
+    const feeds = this.feedsData().map(f => ({
+      ...f,
+      onClick: () => this.setState({ filter: f.id }),
+      rowStyle: this.state.filter === f.id
+        ? { ...rowBase, background:'var(--soft)', color:'var(--ink)', fontWeight:600 }
+        : { ...rowBase, background:'transparent', color:'var(--muted)', fontWeight:500 },
+      dotStyle: { width:'9px', height:'9px', borderRadius:'50%', background:f.color, flex:'0 0 auto' },
+      officeFolderStyle: this.state.filter === f.id
+        ? { display:'flex', alignItems:'center', gap:'9px', width:'100%', padding:'6px 10px', border:'none', borderLeft:'3px solid var(--o-selbar)', background:'var(--o-sel)', color:'var(--o-ink)', cursor:'pointer', fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'13px', fontWeight:600, textAlign:'left' }
+        : { display:'flex', alignItems:'center', gap:'9px', width:'100%', padding:'6px 10px', border:'none', borderLeft:'3px solid transparent', background:'transparent', color:'var(--o-ink)', cursor:'pointer', fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'13px', fontWeight:500, textAlign:'left' },
+    }));
+
+    const decorate = a => {
+      const isRead = this.isReadOf(a);
+      const dim = isRead ? 0.58 : 1;
+      return {
+        ...a,
+        isRead,
+        isComic: a.type === 'comic',
+        isPhoto: a.type === 'photo',
+        showDot: !isRead,
+        meta: a.words > 0 ? (a.words.toLocaleString() + ' words') : (a.type === 'comic' ? (a.panels + ' panels') : 'photo'),
+        readLabel: isRead ? '✓ Read' : 'Mark read',
+        onToggle: () => this.toggleRead(a.id),
+        cardStyle: { background:'var(--card)', border:'1px solid var(--line)', borderRadius:'13px', overflow:'hidden', display:'flex', flexDirection:'column', opacity:dim },
+        titleStyle: { fontFamily:"'Newsreader',serif", fontSize:'17px', lineHeight:1.24, margin:'0 0 7px', color:'var(--ink)', fontWeight: isRead ? 480 : 600 },
+        feedDotStyle: { width:'8px', height:'8px', borderRadius:'50%', background:a.feedColor, flex:'0 0 auto' },
+        officeRowStyle: { display:'flex', alignItems:'center', gap:'13px', padding:'12px 16px', borderBottom:'1px solid var(--line)', opacity:dim },
+        officeTitleStyle: { flex:'1 1 auto', minWidth:0, fontFamily:"'Newsreader',serif", fontSize:'15.5px', color:'var(--ink)', fontWeight: isRead ? 480 : 600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' },
+        unreadSlot: { width:'7px', height:'7px', borderRadius:'50%', background: isRead ? 'transparent' : 'var(--accent)', flex:'0 0 auto', marginTop:'6px' },
+        onSelect: () => this.setState({ selected: a.id }),
+        listRowStyle: { display:'flex', alignItems:'flex-start', gap:'11px', padding:'11px 14px 11px 11px', cursor:'pointer', borderBottom:'1px solid var(--line)', borderLeft: (a.id === selId) ? '3px solid var(--accent)' : '3px solid transparent', background: (a.id === selId) ? 'var(--soft)' : 'transparent', opacity: isRead ? 0.7 : 1 },
+        senderStyle: { fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'13.5px', color:'var(--ink)', fontWeight: isRead ? 500 : 700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:'1 1 auto', minWidth:0 },
+        subjectStyle: { fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'12.5px', color:'var(--ink)', fontWeight: isRead ? 440 : 600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginTop:'1px' },
+        mailRowStyle: { display:'flex', alignItems:'flex-start', gap:'10px', padding:'9px 14px 9px 11px', cursor:'pointer', borderBottom:'1px solid var(--o-line)', borderLeft: (a.id === selId) ? '3px solid var(--o-selbar)' : '3px solid transparent', background: (a.id === selId) ? 'var(--o-sel)' : 'transparent' },
+        mailDotStyle: { width:'8px', height:'8px', borderRadius:'50%', background: isRead ? 'transparent' : 'var(--o-blue)', flex:'0 0 auto', marginTop:'4px' },
+        mailSenderStyle: { fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'13px', color:'var(--o-ink)', fontWeight: isRead ? 400 : 700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:'1 1 auto', minWidth:0 },
+        mailSubjectStyle: { fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'12.5px', color: isRead ? 'var(--o-sub)' : 'var(--o-ink)', fontWeight: isRead ? 400 : 600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginTop:'1px' },
+      };
+    };
+
+    const visible = this.articlesData().filter(a => this.state.filter === 'all' || a.feedId === this.state.filter);
+    const cur = this.feedsData().find(f => f.id === this.state.filter);
+    const selId = (this.state.selected && visible.some(a => a.id === this.state.selected)) ? this.state.selected : (visible[0] && visible[0].id);
+    const selRaw = visible.find(a => a.id === selId);
+    const selIsRead = selRaw ? this.isReadOf(selRaw) : false;
+    const sel = selRaw ? {
+      exists: true,
+      title: selRaw.title, feed: selRaw.feed, time: selRaw.time, feedColor: selRaw.feedColor,
+      isComic: selRaw.type === 'comic', isPhoto: selRaw.type === 'photo',
+      meta: selRaw.words > 0 ? (selRaw.words.toLocaleString() + ' words') : (selRaw.type === 'comic' ? (selRaw.panels + ' panels') : 'photo'),
+      body: (selRaw.body || []).map(t => ({ text: t })),
+      readLabel: selIsRead ? '✓ Read' : 'Mark read',
+      onToggle: () => this.toggleRead(selRaw.id),
+      initial: selRaw.feed.charAt(0),
+      avatarStyle: { width:'34px', height:'34px', borderRadius:'50%', background: selRaw.feedColor, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'14px', fontWeight:700, flex:'0 0 auto' },
+    } : { exists: false, body: [] };
+
+    const priColors = { high:'#e2483d', med:'#e09f3e', low:'#4a90d6' };
+    const cards = visible.map(a => {
+      const st = this.statusOf(a);
+      const pri = a.words > 1000 ? 'high' : (a.type === 'comic' ? 'low' : 'med');
+      return {
+        id: a.id,
+        key: 'RSS-' + a.id.slice(1),
+        title: a.title,
+        feed: a.feed,
+        status: st,
+        onClick: () => this.cycleStatus(a.id),
+        squareStyle: { width:'14px', height:'14px', borderRadius:'3px', background:a.feedColor, flex:'0 0 auto' },
+        priStyle: { color: priColors[pri], fontWeight:700, fontSize:'15px', lineHeight:1, flex:'0 0 auto', marginLeft:'auto' },
+        initial: a.feed.charAt(0),
+        avatarStyle: { width:'22px', height:'22px', borderRadius:'50%', background:'#dce0e6', color:'#44546f', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Hanken Grotesk',sans-serif", fontSize:'10px', fontWeight:700, flex:'0 0 auto' },
+      };
+    });
+    const boardTodo = cards.filter(c => c.status === 'todo');
+    const boardDoing = cards.filter(c => c.status === 'doing');
+    const boardDone = cards.filter(c => c.status === 'done');
+
+    return {
+      isHome: layout === 'home',
+      isOffice: layout === 'office',
+      isBoard: layout === 'board',
+      themeStyle,
+      officeVars,
+      themeIcon: dark ? '☾' : '☀',
+      themeLabel: dark ? 'Dark' : 'Light',
+      homeSeg: layout === 'home' ? segActive : segIdle,
+      officeSeg: layout === 'office' ? segActive : segIdle,
+      boardSeg: layout === 'board' ? segActive : segIdle,
+      feeds,
+      articles: visible.map(decorate),
+      sel,
+      boardTodo, boardDoing, boardDone,
+      boardTodoN: boardTodo.length, boardDoingN: boardDoing.length, boardDoneN: boardDone.length,
+      filterName: cur ? cur.name : 'All Stories',
+      visibleCount: visible.length,
+      setHome: () => this.setState({ layout: 'home' }),
+      setOffice: () => this.setState({ layout: 'office' }),
+      setBoard: () => this.setState({ layout: 'board' }),
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      markAll: () => this.setState(s => {
+        const r = { ...s.reads };
+        visible.forEach(a => { r[a.id] = true; });
+        return { reads: r };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>
