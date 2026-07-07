@@ -46,12 +46,19 @@ def _fetch(url: str) -> httpx.Response:
         "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.5",
     }
     url, headers = reddit.prepare(url, headers)  # OAuth-lift Reddit if configured
+    is_rd = reddit.is_reddit(url)
+    if is_rd:
+        reddit.wait_turn()  # pace within Reddit's per-IP window
     r = httpx.get(url, timeout=config.FETCH_TIMEOUT, follow_redirects=True, headers=headers)
+    if is_rd:
+        reddit.note_response(r)
     if r.status_code == 429:  # rate-limited (Reddit et al.) — back off once, then give up
         wait = _retry_wait(r)
         if wait:
             time.sleep(wait)
             r = httpx.get(url, timeout=config.FETCH_TIMEOUT, follow_redirects=True, headers=headers)
+            if is_rd:
+                reddit.note_response(r)
     r.raise_for_status()
     return r
 
