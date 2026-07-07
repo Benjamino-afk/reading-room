@@ -77,6 +77,7 @@ const S = {
   accent: localStorage.getItem("rr-accent") || "terracotta",
   filter: "all",
   boardFilter: false,    // board-view feed picker dropdown open?
+  layoutMenu: false,     // header layout (Home/Office/Board) dropdown open?
   view: "reader",        // reader | manager | story
   storyId: null,
   selected: null,
@@ -191,23 +192,24 @@ function headerHTML() {
     : S.layout === "board"
     ? { bg: board["--b-bg"], ink: board["--b-ink"], line: board["--b-line"], accent: board["--b-accent"], soft: dark ? "#2c333a" : "#ebecf0", muted: board["--b-sub"] }
     : { bg: "var(--card)", ink: "var(--ink)", line: "var(--line)", accent: "var(--accent)", soft: "var(--soft)", muted: "var(--muted)" };
-  const segBase = "padding:7px 15px;border:none;border-radius:8px;font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;min-width:66px";
-  const seg = id => S.layout === id
-    ? `${segBase};background:${h.bg};color:${h.ink};box-shadow:0 1px 2px rgba(0,0,0,0.16)`
-    : `${segBase};background:transparent;color:${h.muted}`;
+  const layoutName = {home: "Home", office: "Office", board: "Board"}[S.layout] || "Home";
+  const menuItem = id => {
+    const on = S.layout === id;
+    return `<button data-act="layout" data-layout="${id}" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 11px;border:none;border-radius:7px;background:${on ? h.soft : "transparent"};color:${on ? h.ink : h.muted};font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;font-weight:${on ? 600 : 500};cursor:pointer;text-align:left;">${{home: "Home", office: "Office", board: "Board"}[id]}${on ? `<span style="color:${h.accent};">✓</span>` : ""}</button>`;
+  };
+  const chrome = `padding:7px 12px;border:1px solid ${h.line};background:${h.bg};border-radius:9px;color:${h.muted};font-size:13px;cursor:pointer;`;
   return `
-  <div style="flex:0 0 auto;height:62px;display:flex;align-items:center;gap:16px;padding:0 18px;background:${h.bg};border-bottom:1px solid ${h.line};transition:background 0.2s,border-color 0.2s;">
+  <div style="flex:0 0 auto;height:62px;display:flex;align-items:center;gap:11px;padding:0 18px;background:${h.bg};border-bottom:1px solid ${h.line};transition:background 0.2s,border-color 0.2s;">
     <div style="display:flex;align-items:center;gap:11px;">
       <div style="width:27px;height:27px;border-radius:7px;background:${h.accent};box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);"></div>
       <span style="font-family:'Newsreader',serif;font-size:22px;font-weight:600;color:${h.ink};letter-spacing:-0.01em;">Reading&nbsp;Room</span>
     </div>
-    <div style="margin:0 auto;display:flex;gap:4px;padding:4px;background:${h.soft};border-radius:11px;">
-      <button data-act="layout" data-layout="home" style="${seg("home")}">Home</button>
-      <button data-act="layout" data-layout="office" style="${seg("office")}">Office</button>
-      <button data-act="layout" data-layout="board" style="${seg("board")}">Board</button>
+    <div style="position:relative;margin-left:auto;">
+      <button data-act="layoutMenu" title="Switch layout" style="${chrome}border-color:${S.layoutMenu ? h.accent : h.line};display:flex;align-items:center;gap:7px;"><span style="font-size:15px;line-height:1;">☰</span>${layoutName}<span style="opacity:0.55;">▾</span></button>
+      ${S.layoutMenu ? `<div data-act="modalKeep" style="position:absolute;top:41px;left:0;z-index:40;width:152px;background:${h.bg};border:1px solid ${h.line};border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.18);padding:5px;">${menuItem("home")}${menuItem("office")}${menuItem("board")}</div>` : ""}
     </div>
-    <button data-act="refresh" title="Poll feeds now" style="padding:7px 12px;border:1px solid ${h.line};background:${h.bg};border-radius:9px;color:${h.muted};font-size:13px;cursor:pointer;">${S.busy ? "Syncing…" : "↻ Sync"}</button>
-    <button data-act="theme" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid ${h.line};background:${h.bg};border-radius:9px;color:${h.muted};font-size:13px;cursor:pointer;"><span style="font-size:14px;">${dark ? "☾" : "☀"}</span>${dark ? "Dark" : "Light"}</button>
+    <button data-act="refresh" title="Poll feeds now" style="${chrome}">${S.busy ? "Syncing…" : "↻ Sync"}</button>
+    <button data-act="theme" style="${chrome}display:flex;align-items:center;gap:7px;"><span style="font-size:14px;">${dark ? "☾" : "☀"}</span>${dark ? "Dark" : "Light"}</button>
     <button data-act="manager" style="padding:8px 15px;border:none;border-radius:9px;background:${h.accent};color:#fff;font-size:13px;font-weight:600;cursor:pointer;">+ Add feed</button>
   </div>`;
 }
@@ -686,13 +688,20 @@ document.addEventListener("click", async e => {
     S.boardFilter = false;
     if (!t) { render(); return; }
   }
+  // Close the header layout dropdown on any click that isn't toggling/using it.
+  if (S.layoutMenu && (!t || !["layoutMenu", "layout", "modalKeep"].includes(t.dataset.act))) {
+    S.layoutMenu = false;
+    if (!t) { render(); return; }
+  }
   if (!t) return;
   const act = t.dataset.act;
   const id = t.dataset.id ? Number(t.dataset.id) : null;
 
   switch (act) {
     case "layout":
-      S.layout = t.dataset.layout; localStorage.setItem("rr-layout", S.layout); render(); break;
+      S.layout = t.dataset.layout; localStorage.setItem("rr-layout", S.layout); S.layoutMenu = false; render(); break;
+    case "layoutMenu":
+      S.layoutMenu = !S.layoutMenu; render(); break;
     case "theme":
       S.theme = S.theme === "dark" ? "light" : "dark"; localStorage.setItem("rr-theme", S.theme); render(); break;
     case "filter":
