@@ -477,13 +477,16 @@ function managerHTML() {
       images:   ["Images ✓",    "#5f7a55", "#eef2e9", "#d8e0cd"],
       summary:  ["Summary only", "#a89e8d", "#f2ecdf", "#e3d9c8"],
     }[f.capability] || ["Summary only", "#a89e8d", "#f2ecdf", "#e3d9c8"];
+    const badge = f.lastError
+      ? `<span title="${esc(f.lastError)}" style="font-size:11px;color:#b5532e;background:#f7e6df;border:1px solid #ecccbf;padding:3px 9px;border-radius:999px;white-space:nowrap;">⚠ Fetch error</span>`
+      : `<span style="font-size:11px;color:${caps[1]};background:${caps[2]};border:1px solid ${caps[3]};padding:3px 9px;border-radius:999px;white-space:nowrap;">${caps[0]}</span>`;
     return `<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;${last ? "" : "border-bottom:1px solid #efe9dc;"}">
       <span style="width:10px;height:10px;border-radius:50%;background:${esc(f.color)};flex:0 0 auto;"></span>
       <div style="flex:1;min-width:0;">
         <div style="font-size:14.5px;font-weight:600;color:#2c2722;">${esc(f.name)}</div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a89e8d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.url)}</div>
       </div>
-      <span style="font-size:11px;color:${caps[1]};background:${caps[2]};border:1px solid ${caps[3]};padding:3px 9px;border-radius:999px;white-space:nowrap;">${caps[0]}</span>
+      ${badge}
       <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b8275;width:58px;text-align:right;">${f.unread} new</span>
       <button data-act="delFeed" data-id="${f.id}" style="width:30px;height:30px;border:1px solid #e8e1d2;border-radius:8px;background:transparent;color:#b5532e;font-size:15px;cursor:pointer;">×</button>
     </div>`;

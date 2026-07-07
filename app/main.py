@@ -78,7 +78,10 @@ def remove_feed(feed_id: int):
 
 @app.post("/api/feeds/{feed_id}/refresh")
 def refresh_feed(feed_id: int):
-    return {"new": feeds.poll(feed_id)}
+    try:
+        return {"new": feeds.poll(feed_id)}
+    except Exception as e:  # a throttled/blocked source shouldn't 500 the UI
+        return {"new": 0, "error": feeds.friendly_error(e)}
 
 
 @app.post("/api/refresh")

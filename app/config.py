@@ -11,7 +11,16 @@ READONLY = os.getenv("READONLY", "0") == "1"
 MAX_IMAGES = int(os.getenv("MAX_IMAGES", "12"))
 FETCH_TIMEOUT = float(os.getenv("FETCH_TIMEOUT", "20"))
 
-USER_AGENT = "ReadingRoom/0.1 (+https://github.com/Benjamino-afk/reading-room)"
+# Reddit wants a unique, descriptive UA; override via env to include your
+# Reddit username if you hit throttling (e.g. "ReadingRoom/0.1 by u/you").
+USER_AGENT = os.getenv(
+    "USER_AGENT",
+    "ReadingRoom/0.1 (+https://github.com/Benjamino-afk/reading-room)",
+)
+
+# App-only OAuth for Reddit feeds (optional — see app/reddit.py).
+REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
+REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
 
 # Per-feed identity colours, assigned round-robin as feeds are added.
 FEED_COLORS = [

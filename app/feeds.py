@@ -7,7 +7,9 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
-from . import config, db, extract
+from . import config, db, extract, reddit
+
+_MAX_BACKOFF = 30.0   # cap the single 429 retry wait (Reddit resets in ~50s)
 
 _FEED_TYPES = (
     "application/rss+xml", "application/atom+xml", "application/feed+json",
@@ -26,19 +28,28 @@ def _entry_time(entry) -> float:
     return time.time()
 
 
+def _retry_wait(r: httpx.Response) -> float:
+    """Seconds to wait before a single 429 retry, from whichever hint Reddit
+    gives (``Retry-After`` or ``x-ratelimit-reset``), capped so a scheduled
+    poll never stalls for long."""
+    hint = r.headers.get("Retry-After") or r.headers.get("x-ratelimit-reset") or ""
+    try:
+        wait = float(hint) if hint else 3.0
+    except ValueError:
+        wait = 3.0
+    return min(max(wait, 0.0), _MAX_BACKOFF)
+
+
 def _fetch(url: str) -> httpx.Response:
     headers = {
         "User-Agent": config.USER_AGENT,
         "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.5",
     }
+    url, headers = reddit.prepare(url, headers)  # OAuth-lift Reddit if configured
     r = httpx.get(url, timeout=config.FETCH_TIMEOUT, follow_redirects=True, headers=headers)
     if r.status_code == 429:  # rate-limited (Reddit et al.) — back off once, then give up
-        retry_after = r.headers.get("Retry-After", "")
-        try:
-            wait = float(retry_after) if retry_after else 3.0
-        except ValueError:
-            wait = 3.0
-        if wait <= 10:
+        wait = _retry_wait(r)
+        if wait:
             time.sleep(wait)
             r = httpx.get(url, timeout=config.FETCH_TIMEOUT, follow_redirects=True, headers=headers)
     r.raise_for_status()
@@ -83,16 +94,41 @@ def add(url: str, full_text: bool) -> int:
     return feed_id
 
 
+def friendly_error(e: Exception) -> str:
+    """A short, user-facing reason a feed failed to fetch."""
+    if isinstance(e, httpx.HTTPStatusError):
+        code = e.response.status_code
+        if code == 429:
+            return "Rate-limited by the source (will retry next poll)."
+        if code in (401, 403):
+            return f"Blocked by the source (HTTP {code}) — may need authentication."
+        return f"Source returned HTTP {code}."
+    if isinstance(e, httpx.HTTPError):
+        return "Could not reach the source."
+    return str(e)
+
+
 def poll(feed_id: int, parsed=None) -> int:
     """Fetch a feed and store any new articles. Returns count of new items.
 
     ``parsed`` may be a feed already fetched by the caller, to avoid a re-fetch.
+    Records the fetch outcome on the feed (cleared on success) so the UI can
+    show which feeds are failing.
     """
     if config.READONLY:
         return 0
     feed = db.get_feed(feed_id)
     if feed is None:
         return 0
+    try:
+        return _poll(feed, parsed)
+    except Exception as e:
+        db.set_feed_status(feed_id, friendly_error(e))
+        raise
+
+
+def _poll(feed, parsed=None) -> int:
+    feed_id = feed["id"]
     if parsed is None:
         parsed = feedparser.parse(_fetch(feed["url"]).content)
     full_text = bool(feed["full_text"])
@@ -123,6 +159,7 @@ def poll(feed_id: int, parsed=None) -> int:
         })
         new += 1
     _record_capability(feed_id, caps)
+    db.set_feed_status(feed_id, None)  # fetch succeeded — clear any prior error
     return new
 
 

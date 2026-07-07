@@ -9,7 +9,7 @@ import httpx
 import trafilatura
 from bs4 import BeautifulSoup
 
-from . import config, images
+from . import config, images, reddit
 
 _SUMMARY_WORDS = 200   # below this, treat the entry as summary-only and fetch
 _COMIC_WORDS = 40
@@ -31,10 +31,11 @@ def _word_count(text: str) -> int:
 
 
 def _fetch(url: str) -> str | None:
+    fetch_url, headers = reddit.prepare(url, {"User-Agent": config.USER_AGENT})
     try:
         r = httpx.get(
-            url, timeout=config.FETCH_TIMEOUT, follow_redirects=True,
-            headers={"User-Agent": config.USER_AGENT},
+            fetch_url, timeout=config.FETCH_TIMEOUT, follow_redirects=True,
+            headers=headers,
         )
         r.raise_for_status()
         return r.text

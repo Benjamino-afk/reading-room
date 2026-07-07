@@ -58,6 +58,16 @@ def init() -> None:
     config.ensure_dirs()
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns to existing DBs in place (there's real data on the NAS)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(feeds)")}
+    if "last_error" not in cols:
+        conn.execute("ALTER TABLE feeds ADD COLUMN last_error TEXT")
+    if "last_fetched" not in cols:
+        conn.execute("ALTER TABLE feeds ADD COLUMN last_fetched REAL")
 
 
 # ---- feeds -----------------------------------------------------------------
@@ -75,7 +85,7 @@ def list_feeds() -> list[dict]:
                 "id": f["id"], "name": f["name"], "url": f["url"],
                 "siteUrl": f["site_url"], "color": f["color"],
                 "fullText": bool(f["full_text"]), "capability": f["capability"],
-                "unread": unread,
+                "unread": unread, "lastError": f["last_error"],
             })
         return rows
 
@@ -104,6 +114,15 @@ def delete_feed(feed_id: int) -> None:
 def set_capability(feed_id: int, capability: str) -> None:
     with connect() as conn:
         conn.execute("UPDATE feeds SET capability=? WHERE id=?", (capability, feed_id))
+
+
+def set_feed_status(feed_id: int, error: Optional[str]) -> None:
+    """Record the last fetch outcome — ``error`` is None on success."""
+    with connect() as conn:
+        conn.execute(
+            "UPDATE feeds SET last_error=?, last_fetched=? WHERE id=?",
+            (error, time.time(), feed_id),
+        )
 
 
 def get_feed(feed_id: int) -> Optional[sqlite3.Row]:

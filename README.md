@@ -42,6 +42,17 @@ SQLite DB + fetched images live in the `./data` volume.
 | `READONLY` | `0` | `1` disables all writes |
 | `MAX_IMAGES` | `12` | images stored per article (0 = unlimited) |
 | `FETCH_TIMEOUT` | `20` | seconds per feed/article fetch |
+| `USER_AGENT` | `ReadingRoom/0.1 …` | outbound UA (Reddit throttles generic ones) |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | — | optional Reddit app-only OAuth (see below) |
+
+### Reddit feeds
+Reddit rate-limits **anonymous** `.rss` to roughly one request per minute per IP,
+so polling more than one subreddit starves. Create a **script** app at
+<https://www.reddit.com/prefs/apps> and set `REDDIT_CLIENT_ID` /
+`REDDIT_CLIENT_SECRET` — the reader then uses app-only OAuth (`oauth.reddit.com`,
+~100 req/min). With no credentials it falls back to the anonymous path with
+rate-limit backoff. A feed that fails to fetch shows a **⚠ Fetch error** badge in
+the feed manager (hover for the reason).
 
 ## API
 | method | path | purpose |
