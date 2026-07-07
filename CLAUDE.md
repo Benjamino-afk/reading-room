@@ -11,9 +11,12 @@ Python 3.12 FastAPI + SQLite (single file, WAL) in one container; vanilla-JS SPA
 - Deploy: push to GitHub → Actions builds `ghcr.io/benjamino-afk/reading-room:latest` → **user** re-pulls/redeploys on the NAS (never deploy from here)
 
 ## Current focus
-Stable. No open feature thread.
+Stable. Last work (2026-07-07): Reddit feeds fixed + header layout switch made subtle.
+No open feature thread. **Pending user action:** re-pull the stack in Portainer to pick
+up the Reddit fixes (DB auto-migrates on boot).
 
 ## Gotchas
-- DB + images live in the `/data` volume (`/volume1/tank/config/reading-room` on the NAS) — schema changes need a migration path, there's real data.
+- DB + images live in the `/data` volume (`/volume1/tank/config/reading-room` on the NAS) — schema changes need a migration path, there's real data. `db._migrate()` adds columns in place on `init()`.
 - Portainer paste gotcha: pasting multi-line env values into the stack editor mangles them (see memory project_reading_room).
 - oauth2-proxy config holds the Cognito secret — Portainer env box, never compose.
+- **Reddit:** anonymous `.rss` is IP-throttled to ~1 req/window; `app/reddit.py` paces requests to fit it. For ~100 req/min, set `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` (script app) in the stack env — OAuth then activates automatically, no code change. A failing feed shows a ⚠ badge in the feed manager.
