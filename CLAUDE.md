@@ -11,9 +11,12 @@ Python 3.12 FastAPI + SQLite (single file, WAL) in one container; vanilla-JS SPA
 - Deploy: push to GitHub → Actions builds `ghcr.io/benjamino-afk/reading-room:latest` → **user** re-pulls/redeploys on the NAS (never deploy from here)
 
 ## Current focus
-Stable. Last work (2026-07-07): Reddit feeds fixed + header layout switch made subtle.
-No open feature thread. **Pending user action:** re-pull the stack in Portainer to pick
-up the Reddit fixes (DB auto-migrates on boot).
+Stable. Last work (2026-07-10): retention — a daily job prunes read articles older than
+`PRUNE_DAYS` (default 30) and GCs images they solely referenced (`db.prune_read` +
+`images.delete_local`, wired in `scheduler.py`); Office view reworked to an Outlook look
+(centered email-card reading pane + a stronger boxed Delete/Archive ribbon group).
+No open feature thread. **Pending user action:** re-pull the stack in Portainer (DB
+auto-migrates on boot; nothing prunes until 24h after boot).
 
 ## Gotchas
 - DB + images live in the `/data` volume (`/volume1/tank/config/reading-room` on the NAS) — schema changes need a migration path, there's real data. `db._migrate()` adds columns in place on `init()`.
