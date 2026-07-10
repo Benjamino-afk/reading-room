@@ -39,6 +39,7 @@ SQLite DB + fetched images live in the `./data` volume.
 |---|---|---|
 | `DATA_DIR` | `/data` | DB + image storage |
 | `POLL_INTERVAL` | `30` | minutes between automatic polls |
+| `PRUNE_DAYS` | `30` | delete read articles older than this (daily job); `0` disables |
 | `READONLY` | `0` | `1` disables all writes |
 | `MAX_IMAGES` | `12` | images stored per article (0 = unlimited) |
 | `FETCH_TIMEOUT` | `20` | seconds per feed/article fetch |

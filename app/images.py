@@ -35,6 +35,24 @@ def localize(client: httpx.Client, src: str, base_url: str) -> str | None:
     return f"/img/{name}"
 
 
+def delete_local(urls: list[str]) -> int:
+    """Remove locally-stored images by their ``/img/<name>`` url. Returns the count
+    actually removed; missing files are ignored."""
+    removed = 0
+    for u in urls:
+        name = u.rsplit("/", 1)[-1]
+        if not name or "/" in name or "\\" in name:
+            continue
+        try:
+            (config.IMAGES_DIR / name).unlink()
+            removed += 1
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+    return removed
+
+
 def localize_many(srcs: list[str], base_url: str) -> list[str]:
     """Download up to MAX_IMAGES images, returning local urls (deduped)."""
     out: list[str] = []

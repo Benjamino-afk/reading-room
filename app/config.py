@@ -7,6 +7,7 @@ IMAGES_DIR = DATA_DIR / "images"
 DB_PATH = DATA_DIR / "reading-room.sqlite"
 
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "30"))      # minutes
+PRUNE_DAYS = int(os.getenv("PRUNE_DAYS", "30"))            # delete read articles older than this; 0 disables
 READONLY = os.getenv("READONLY", "0") == "1"
 MAX_IMAGES = int(os.getenv("MAX_IMAGES", "12"))
 FETCH_TIMEOUT = float(os.getenv("FETCH_TIMEOUT", "20"))

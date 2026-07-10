@@ -182,6 +182,35 @@ def update_article(article_id: int, read: Optional[bool], status: Optional[str])
         conn.execute(f"UPDATE articles SET {','.join(sets)} WHERE id=?", params)
 
 
+def prune_read(days: int) -> tuple[int, list[str]]:
+    """Delete read articles older than ``days`` and return the number removed plus
+    any local image urls left unreferenced by surviving articles, so the caller can
+    reclaim those files. ``days <= 0`` disables pruning (returns 0, []).
+    """
+    if days <= 0:
+        return 0, []
+    cutoff = time.time() - days * 86400
+    with connect() as conn:
+        stale = conn.execute(
+            "SELECT image_paths FROM articles WHERE read=1 AND time < ?", (cutoff,)
+        ).fetchall()
+        imgs: set[str] = set()
+        for r in stale:
+            imgs.update(json.loads(r["image_paths"]))
+        deleted = conn.execute(
+            "DELETE FROM articles WHERE read=1 AND time < ?", (cutoff,)
+        ).rowcount
+        # An image is content-addressed, so a surviving article may still cite one
+        # a pruned article used — only delete files nothing references anymore.
+        orphans = [
+            u for u in imgs
+            if conn.execute(
+                "SELECT 1 FROM articles WHERE image_paths LIKE ? LIMIT 1", (f"%{u}%",)
+            ).fetchone() is None
+        ]
+    return deleted, orphans
+
+
 def mark_all_read(feed: str = "all") -> None:
     sql = "UPDATE articles SET read=1, status=CASE status WHEN 'done' THEN 'done' ELSE status END "
     params: tuple = ()
