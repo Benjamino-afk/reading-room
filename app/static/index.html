@@ -101,6 +101,17 @@ async function load() {
   render();
 }
 
+// Opening a story counts as reading it: flip local state (article + feed unread
+// badge) so the UI is right immediately, and persist in the background.
+function markRead(id) {
+  const a = S.articles.find(x => x.id === id);
+  if (!a || a.read) return;
+  a.read = true;
+  const f = S.feeds.find(x => x.name === a.feed);
+  if (f && f.unread > 0) f.unread--;
+  api.patch(id, {read: true});
+}
+
 // ---- theme tokens (ported from the design handoff) -------------------------
 function tokens() {
   const accentLight = {terracotta:"#b5532e", sage:"#5f7a55", indigo:"#4f5b9a"}[S.accent] || "#b5532e";
@@ -724,14 +735,14 @@ document.addEventListener("click", async e => {
     case "selectMail":
       S.selected = id; render(); break;
     case "story":
-      S.storyId = id; S.view = "story"; render(); break;
+      S.storyId = id; S.view = "story"; markRead(id); render(); break;
     case "storyPrev": {
       const i = S.articles.findIndex(x => x.id === S.storyId);
-      if (i > 0) { S.storyId = S.articles[i - 1].id; render(); } break;
+      if (i > 0) { S.storyId = S.articles[i - 1].id; markRead(S.storyId); render(); } break;
     }
     case "storyNext": {
       const i = S.articles.findIndex(x => x.id === S.storyId);
-      if (i >= 0 && i < S.articles.length - 1) { S.storyId = S.articles[i + 1].id; render(); } break;
+      if (i >= 0 && i < S.articles.length - 1) { S.storyId = S.articles[i + 1].id; markRead(S.storyId); render(); } break;
     }
     case "toggleRead": {
       const a = S.articles.find(x => x.id === id);
