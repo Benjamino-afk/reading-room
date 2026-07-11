@@ -11,6 +11,15 @@ from . import config, db, extract, reddit
 
 _MAX_BACKOFF = 30.0   # cap the single 429 retry wait (Reddit resets in ~50s)
 
+# Live progress of the poll currently running, for the UI ({} when idle).
+# Keys: feedsDone/feedsTotal (poll_all) + feed/done/total (per-feed ingest).
+# Single-user tool: overlapping polls just last-writer-win.
+_progress: dict = {}
+
+
+def progress() -> dict:
+    return dict(_progress)
+
 _FEED_TYPES = (
     "application/rss+xml", "application/atom+xml", "application/feed+json",
     "application/json",
@@ -139,32 +148,42 @@ def _poll(feed, parsed=None) -> int:
     if parsed is None:
         parsed = feedparser.parse(_fetch(feed["url"]).content)
     full_text = bool(feed["full_text"])
-    new = 0
-    caps: set[str] = set()
+    new_entries: list[tuple[str, dict]] = []
+    seen: set[str] = set()
     for entry in parsed.entries:
         guid = _hash_guid(entry)
-        if not guid or db.article_exists(feed_id, guid):
-            continue
-        ex = extract.extract_entry(entry, full_text)
-        if ex["words"] >= 200:
-            caps.add("fulltext")
-        if ex["image_paths"]:
-            caps.add("images")
-        if ex["type"] == "comic":
-            caps.add("comics")
-        db.insert_article({
-            "feed_id": feed_id,
-            "guid": guid,
-            "type": ex["type"],
-            "title": entry.get("title", "(untitled)"),
-            "snippet": ex["snippet"],
-            "body_json": json.dumps(ex["body_json"]),
-            "image_paths": json.dumps(ex["image_paths"]),
-            "panels": ex["panels"],
-            "time": _entry_time(entry),
-            "words": ex["words"],
-        })
-        new += 1
+        if guid and guid not in seen and not db.article_exists(feed_id, guid):
+            seen.add(guid)
+            new_entries.append((guid, entry))
+    _progress.update({"feed": feed["name"], "done": 0, "total": len(new_entries)})
+    new = 0
+    caps: set[str] = set()
+    try:
+        for guid, entry in new_entries:
+            ex = extract.extract_entry(entry, full_text)
+            if ex["words"] >= 200:
+                caps.add("fulltext")
+            if ex["image_paths"]:
+                caps.add("images")
+            if ex["type"] == "comic":
+                caps.add("comics")
+            db.insert_article({
+                "feed_id": feed_id,
+                "guid": guid,
+                "type": ex["type"],
+                "title": entry.get("title", "(untitled)"),
+                "snippet": ex["snippet"],
+                "body_json": json.dumps(ex["body_json"]),
+                "image_paths": json.dumps(ex["image_paths"]),
+                "panels": ex["panels"],
+                "time": _entry_time(entry),
+                "words": ex["words"],
+            })
+            new += 1
+            _progress["done"] = new
+    finally:
+        for k in ("feed", "done", "total"):
+            _progress.pop(k, None)
     _record_capability(feed_id, caps)
     db.set_feed_status(feed_id, None)  # fetch succeeded — clear any prior error
     return new
@@ -172,11 +191,16 @@ def _poll(feed, parsed=None) -> int:
 
 def poll_all() -> int:
     total = 0
-    for f in db.list_feeds():
-        try:
-            total += poll(f["id"])
-        except Exception as e:  # one bad feed shouldn't stop the rest
-            print(f"[poll] feed {f['id']} failed: {e}", flush=True)
+    all_feeds = db.list_feeds()
+    try:
+        for i, f in enumerate(all_feeds):
+            _progress.update({"feedsDone": i, "feedsTotal": len(all_feeds)})
+            try:
+                total += poll(f["id"])
+            except Exception as e:  # one bad feed shouldn't stop the rest
+                print(f"[poll] feed {f['id']} failed: {e}", flush=True)
+    finally:
+        _progress.clear()
     return total
 
 

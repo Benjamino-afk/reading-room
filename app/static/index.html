@@ -59,6 +59,7 @@ const api = {
     method: "PATCH", headers: {"Content-Type": "application/json"},
     body: JSON.stringify(body)}).then(r => r.json()),
   markAll: feed => fetch(`/api/articles/mark-all-read?feed=${feed}`, {method: "POST"}),
+  progress: () => fetch("/api/progress").then(r => r.json()),
   addFeed: (url, fullText) => fetch("/api/feeds", {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({url, fullText})}),
@@ -674,10 +675,30 @@ function render() {
   if (S.view === "story" && !storyOpen) S.view = "reader";
 }
 
+// Floating pill showing live sync progress. Lives on <body>, outside the render
+// cycle, so periodic updates don't rebuild the app DOM mid-read.
+function showProgress(p) {
+  let el = document.getElementById("rr-progress");
+  const parts = [];
+  if (p && p.feedsTotal) parts.push(`feed ${Math.min(p.feedsDone + 1, p.feedsTotal)}/${p.feedsTotal}`);
+  if (p && p.total) parts.push(`${p.feed} ${p.done}/${p.total} stories`);
+  if (!parts.length) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "rr-progress";
+    el.style.cssText = "position:fixed;right:18px;bottom:18px;z-index:90;padding:9px 16px;border-radius:99px;background:rgba(28,26,23,0.92);color:#f5f1ea;font-family:'Hanken Grotesk',sans-serif;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,0.28);pointer-events:none;";
+    document.body.appendChild(el);
+  }
+  el.textContent = `⟳ Syncing ${parts.join(" · ")}`;
+}
+
 // ---- events ----------------------------------------------------------------
 async function withBusy(fn) {
   S.busy = true; render();
-  try { await fn(); } finally { S.busy = false; }
+  const t = setInterval(async () => {
+    try { const p = await api.progress(); if (S.busy) showProgress(p); } catch {}
+  }, 1200);
+  try { await fn(); } finally { clearInterval(t); showProgress(null); S.busy = false; }
   await load();
 }
 

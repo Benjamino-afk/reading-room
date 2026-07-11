@@ -89,6 +89,11 @@ def refresh_all():
     return {"new": feeds.poll_all()}
 
 
+@app.get("/api/progress")
+def get_progress():
+    return feeds.progress()
+
+
 # ---- OPML ------------------------------------------------------------------
 
 @app.get("/api/opml")

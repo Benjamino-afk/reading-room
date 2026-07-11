@@ -15,8 +15,10 @@ Stable. Last work (2026-07-10): retention — a daily job prunes read articles o
 `PRUNE_DAYS` (default 30) and GCs images they solely referenced (`db.prune_read` +
 `images.delete_local`, wired in `scheduler.py`); Office view reworked to an Outlook look
 (centered email-card reading pane + a stronger boxed Delete/Archive ribbon group).
-No open feature thread. Deployed to the NAS 2026-07-11 (re-pull done; DB migrated on
-boot; first prune fires 24h after boot).
+Deployed to the NAS 2026-07-11 (re-pull done; DB migrated on boot; first prune fires
+24h after boot). Since that re-pull: stories auto-mark read on open, and a floating
+pill shows live sync progress (`GET /api/progress`, polled while busy) — awaiting the
+next re-pull.
 
 ## Gotchas
 - DB + images live in the `/data` volume (`/volume1/tank/config/reading-room` on the NAS) — schema changes need a migration path, there's real data. `db._migrate()` adds columns in place on `init()`.
