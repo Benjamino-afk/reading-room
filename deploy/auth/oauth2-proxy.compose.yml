@@ -18,6 +18,10 @@ services:
     network_mode: bridge          # default bridge = internet egress for Cognito
     ports:
       - "4180:4180"               # tailscale serve/funnel points here
+    volumes:
+      # One line per allowed address. MUST exist and be non-empty or the
+      # container exits on boot — see README ("Pin the allowed email").
+      - /volume1/tank/config/reading-room-auth/authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
       # from cognito-setup.sh output:
@@ -31,7 +35,9 @@ services:
       OAUTH2_PROXY_REVERSE_PROXY: "true"                    # behind Funnel/Tailscale
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"             # straight to Cognito login
-      OAUTH2_PROXY_EMAIL_DOMAINS: "*"                       # any verified Cognito user
+      # No EMAIL_DOMAINS: a "*" there short-circuits the allow-list and lets any
+      # verified Cognito user in. The mounted file is the only way in.
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/authenticated-emails.txt
       OAUTH2_PROXY_REDIRECT_URL: https://as5404t-6005-1.taild91d92.ts.net/oauth2/callback
       OAUTH2_PROXY_WHITELIST_DOMAINS: as5404t-6005-1.taild91d92.ts.net
       OAUTH2_PROXY_COOKIE_DOMAINS: as5404t-6005-1.taild91d92.ts.net

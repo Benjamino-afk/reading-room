@@ -63,11 +63,23 @@ approve it, re-run. `tailscale funnel reset` clears a stale/tailnet-only config.
 Then open `https://FUNNEL_HOST` from any machine (no Tailscale needed) → Cognito
 login → Reading Room.
 
+## Pin the allowed email (who may log in)
+The compose mounts an allow-list file and sets `AUTHENTICATED_EMAILS_FILE`;
+there is deliberately **no `EMAIL_DOMAINS`**, because a `*` there short-circuits
+the allow-list and admits any verified Cognito user. Create the file on the NAS
+**before** updating the stack — oauth2-proxy exits on boot if it's missing:
+```bash
+mkdir -p /volume1/tank/config/reading-room-auth
+echo 'ben.designer.bc@gmail.com' > /volume1/tank/config/reading-room-auth/authenticated-emails.txt
+```
+One address per line; add a line + restart the container to admit someone else.
+A rejected address gets a 403 *after* a successful Cognito login (expected).
+Locking out the Funnel does not affect `:8087` on the LAN/tailnet.
+
 ## Notes / gotchas
 - Funnel only serves on 443 / 8443 / 10000 — 443 is used here.
 - The `*.ts.net` name is fixed; a custom domain (reading-room.avgchap.com) is the
   one thing this path can't do — that would need AWS/Cloudflare fronting instead.
 - Reading Room's `:8087` remains directly reachable (unauthed) on LAN/tailnet by
   design; only the public Funnel path is gated.
-- To lock login to just your address, set `OAUTH2_PROXY_EMAIL_DOMAINS` to your
-  domain or use `OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE`.
+- Login is pinned to one address — see "Pin the allowed email" above.
