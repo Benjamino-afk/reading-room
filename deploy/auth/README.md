@@ -15,9 +15,9 @@ Single-tenant: everyone who logs in shares the same reader. Sized for one user
 (you) for now; adding more Cognito users gives them the *same* feeds until/unless
 we do the multi-tenant refactor.
 
-**Funnel host:** `as5404t-6005-1.taild91d92.ts.net`
-**Tailscale runs in a container** (`tailscale-docker`, container name `TailScale`,
-host-network) — run all `tailscale ...` commands via `docker exec TailScale ...`.
+**Funnel host:** `ngihome.taild91d92.ts.net` (moved off the NAS 2026-08-22).
+**Tailscale is a native package on ngihome** (not containerised as it was on the
+NAS) — run `tailscale ...` directly; changing serve/funnel needs `sudo`.
 
 ## Prerequisites (Tailscale — one-time)
 1. **Enable HTTPS certificates** for the tailnet — admin console → DNS page →
@@ -46,9 +46,9 @@ FUNNEL_HOST=as5404t-6005-1.taild91d92.ts.net ./cognito-setup.sh
    `Documents\AIwork\Secrets\reading-room-cognito.txt`:
    - `CLIENT_SECRET` = the Cognito client secret
    - `COOKIE_SECRET` = the 32-byte base64 cookie secret
-3. Deploy. Verify `http://192.168.1.204:4180` on the LAN bounces to a Cognito
-   login. (If the upstream `172.17.0.1:8087` doesn't reach Reading Room on ADM,
-   switch it to `http://192.168.1.204:8087`.)
+3. Deploy. Verify `http://192.168.1.17:4180` on the LAN bounces to a Cognito
+   login. Both services share one compose network, so the upstream is the
+   service name `http://reading-room:8080` — no host-gateway hop.
 
 ## Step 3 — Tailscale Funnel (on the NAS, via the container)
 Tailscale 1.98+ uses the new serve/funnel CLI: one command, target is just the
@@ -66,11 +66,13 @@ login → Reading Room.
 ## Pin the allowed email (who may log in)
 The compose mounts an allow-list file and sets `AUTHENTICATED_EMAILS_FILE`;
 there is deliberately **no `EMAIL_DOMAINS`**, because a `*` there short-circuits
-the allow-list and admits any verified Cognito user. Create the file on the NAS
-**before** updating the stack — oauth2-proxy exits on boot if it's missing:
+the allow-list and admits any verified Cognito user. Create the file on ngihome
+**before** updating the stack — if the path doesn't exist Docker creates a
+*directory* there and oauth2-proxy exits on boot. `/volume1/tank/config` on
+ngihome is local disk (only `media/` and `photos/` are NFS) and is root-owned:
 ```bash
-mkdir -p /volume1/tank/config/reading-room-auth
-echo 'ben.designer.bc@gmail.com' > /volume1/tank/config/reading-room-auth/authenticated-emails.txt
+sudo mkdir -p /volume1/tank/config/reading-room-auth
+echo 'ben.designer.bc@gmail.com' | sudo tee /volume1/tank/config/reading-room-auth/authenticated-emails.txt
 ```
 One address per line; add a line + restart the container to admit someone else.
 A rejected address gets a 403 *after* a successful Cognito login (expected).

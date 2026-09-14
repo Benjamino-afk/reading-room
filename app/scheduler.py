@@ -23,13 +23,15 @@ def start() -> None:
     _scheduler = BackgroundScheduler(daemon=True)
     _scheduler.add_job(
         feeds.poll_all, "interval", minutes=config.POLL_INTERVAL,
-        next_run_time=None, id="poll_all", max_instances=1,
+        id="poll_all", max_instances=1,
     )
     if config.PRUNE_DAYS > 0:
         _scheduler.add_job(
             _prune, "interval", hours=24, id="prune", max_instances=1,
         )
     _scheduler.start()
+    nxt = _scheduler.get_job("poll_all").next_run_time
+    print(f"[scheduler] polling every {config.POLL_INTERVAL}m, next run {nxt}", flush=True)
 
 
 def stop() -> None:

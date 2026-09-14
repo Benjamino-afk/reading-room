@@ -1,43 +1,61 @@
-# oauth2-proxy — Cognito login gate in front of Reading Room, on the NAS.
+# Reading Room + its Cognito login gate — the LIVE stack on ngihome.
 #
-# Deploy as its OWN Portainer stack (do NOT merge into the reading-room stack).
-# It sits on the default bridge so it has internet egress to reach Cognito, and
-# reaches Reading Room via the host's already-published :8087 (default bridge
-# has no service-name DNS — see project-new-nas networking note).
+# ONE Portainer stack (project "reading-room") holding both services. This
+# replaces the NAS-era layout, where oauth2-proxy was a separate stack on the
+# default bridge reaching the app via 172.17.0.1:8087. On ngihome they share a
+# compose network, so the upstream is the service name.
 #
-# Tailscale Funnel publishes ONLY this container's :4180 to the internet.
-# Reading Room's own :8087 stays LAN/tailnet-only and unauthenticated (trusted).
+# Two doors, by design:
+#   :8087  LAN/tailnet only, UNAUTHENTICATED (trusted network)
+#   :4180  the only port Tailscale Funnel publishes — Cognito-gated
 #
-# Secrets (CLIENT_SECRET, COOKIE_SECRET) are set as Portainer stack env vars,
-# NOT written here. Non-secret values are inlined for clarity.
+# Secrets (CLIENT_SECRET, COOKIE_SECRET) are Portainer stack env vars, never here.
+#
+# Portainer gotcha: upload this file on the Upload tab. Pasting into the web
+# editor corrupts the YAML.
 services:
-  reading-room-auth:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
-    container_name: reading-room-auth
-    restart: unless-stopped
-    network_mode: bridge          # default bridge = internet egress for Cognito
+  reading-room:
+    image: "ghcr.io/benjamino-afk/reading-room:latest"
+    container_name: "reading-room"
+    restart: "unless-stopped"
     ports:
-      - "4180:4180"               # tailscale serve/funnel points here
+      - "8087:8080"
     volumes:
-      # One line per allowed address. MUST exist and be non-empty or the
-      # container exits on boot — see README ("Pin the allowed email").
-      - /volume1/tank/config/reading-room-auth/authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro
+      - "/volume1/tank/config/reading-room/data:/data"
     environment:
-      OAUTH2_PROXY_PROVIDER: oidc
-      # from cognito-setup.sh output:
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_S4dFr1uaQ
-      OAUTH2_PROXY_CLIENT_ID: 1cs8rkv7aspv5rs4t8bg1llffb
-      OAUTH2_PROXY_CLIENT_SECRET: ${CLIENT_SECRET}          # Portainer env
-      OAUTH2_PROXY_COOKIE_SECRET: ${COOKIE_SECRET}          # Portainer env (32-byte base64)
-      # upstream = Reading Room via the host's published port (docker0 gateway):
-      OAUTH2_PROXY_UPSTREAMS: http://172.17.0.1:8087
-      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
-      OAUTH2_PROXY_REVERSE_PROXY: "true"                    # behind Funnel/Tailscale
+      DATA_DIR: "/data"
+      POLL_INTERVAL: "30"
+      READONLY: "0"
+      MAX_IMAGES: "12"
+      FETCH_TIMEOUT: "20"
+
+  reading-room-auth:
+    image: "quay.io/oauth2-proxy/oauth2-proxy:v7.6.0"
+    container_name: "reading-room-auth"
+    restart: "unless-stopped"
+    depends_on:
+      - "reading-room"
+    ports:
+      - "4180:4180"
+    volumes:
+      # One address per line. This file MUST exist, as a FILE, before the stack
+      # is updated — Docker would otherwise create a directory at this path and
+      # oauth2-proxy exits on boot. See README ("Pin the allowed email").
+      - "/volume1/tank/config/reading-room-auth/authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro"
+    environment:
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_S4dFr1uaQ"
+      OAUTH2_PROXY_CLIENT_ID: "1cs8rkv7aspv5rs4t8bg1llffb"
+      OAUTH2_PROXY_CLIENT_SECRET: "${CLIENT_SECRET}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${COOKIE_SECRET}"
+      OAUTH2_PROXY_UPSTREAMS: "http://reading-room:8080"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
       OAUTH2_PROXY_COOKIE_SECURE: "true"
-      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"             # straight to Cognito login
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
       # No EMAIL_DOMAINS: a "*" there short-circuits the allow-list and lets any
       # verified Cognito user in. The mounted file is the only way in.
-      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/authenticated-emails.txt
-      OAUTH2_PROXY_REDIRECT_URL: https://as5404t-6005-1.taild91d92.ts.net/oauth2/callback
-      OAUTH2_PROXY_WHITELIST_DOMAINS: as5404t-6005-1.taild91d92.ts.net
-      OAUTH2_PROXY_COOKIE_DOMAINS: as5404t-6005-1.taild91d92.ts.net
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: "/etc/oauth2-proxy/authenticated-emails.txt"
+      OAUTH2_PROXY_REDIRECT_URL: "https://ngihome.taild91d92.ts.net/oauth2/callback"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: "ngihome.taild91d92.ts.net"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "ngihome.taild91d92.ts.net"

@@ -1,10 +1,12 @@
 # Deploy Reading Room
 
-The image is built automatically by GitHub and stored online. The NAS just
+The image is built automatically by GitHub and stored online. ngihome just
 downloads and runs it. Four steps.
 
-## 1. Let the NAS log in to GitHub (one time only)
-The image is private, so the NAS needs a read-only token to download it.
+(Moved off the NAS 2026-08-22 — the host is now ngihome / 192.168.1.17.)
+
+## 1. Let ngihome log in to GitHub (one time only)
+The image is private, so the host needs a read-only token to download it.
 
 **a. Make a token:** open this link (scope is pre-ticked) →
 https://github.com/settings/tokens/new?scopes=read:packages&description=NAS+GHCR
@@ -42,8 +44,10 @@ services:
 ```
 
 ## 3. Open it
-- On the LAN: **http://192.168.1.204:8087**
-- Anywhere (Tailscale): **http://as5404t-6005-1:8087**
+- On the LAN: **http://192.168.1.17:8087**
+- Anywhere (Tailscale): **http://ngihome:8087**
+- From the internet: **https://ngihome.taild91d92.ts.net** (Cognito-gated; the
+  two ports above are unauthenticated by design and LAN/tailnet only)
 
 ## 4. Add your first feed
 Click **+ Add feed**, paste a site or feed URL (e.g. `https://hnrss.org/frontpage`),
@@ -51,7 +55,7 @@ hit **Fetch & add**. Done.
 
 ## Updating later
 When the code changes (a push to `main`), GitHub rebuilds the image. To get the
-new version on the NAS: Portainer → the `reading-room` stack → **Update the stack**
+new version: ngihome Portainer → the `reading-room` stack → **Update the stack**
 → tick **Re-pull image** → **Update**.
 
 ## Settings (optional)

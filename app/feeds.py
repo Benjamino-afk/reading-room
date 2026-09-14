@@ -201,6 +201,7 @@ def poll_all() -> int:
                 print(f"[poll] feed {f['id']} failed: {e}", flush=True)
     finally:
         _progress.clear()
+    print(f"[poll] swept {len(all_feeds)} feeds, {total} new articles", flush=True)
     return total
 
 
