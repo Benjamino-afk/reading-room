@@ -11,14 +11,14 @@ Python 3.12 FastAPI + SQLite (single file, WAL) in one container; vanilla-JS SPA
 - Deploy: push to GitHub → Actions builds `ghcr.io/benjamino-afk/reading-room:latest` → **user** re-pulls/redeploys in Portainer on the host (never deploy from here)
 
 ## Current focus
-Stable. Last work (2026-07-10): retention — a daily job prunes read articles older than
-`PRUNE_DAYS` (default 30) and GCs images they solely referenced (`db.prune_read` +
-`images.delete_local`, wired in `scheduler.py`); Office view reworked to an Outlook look
-(centered email-card reading pane + a stronger boxed Delete/Archive ribbon group).
-Deployed to the NAS 2026-07-11 (re-pull done; DB migrated on boot; first prune fires
-24h after boot). Since that re-pull: stories auto-mark read on open, and a floating
-pill shows live sync progress (`GET /api/progress`, polled while busy) — awaiting the
-next re-pull.
+Stable. Last work (2026-11-08): Office + Board reworked to carry Reading Room's identity
+(feed dots, Newsreader titles, real content) with every non-functional Outlook/Jira control
+removed. Board columns derive from read state (`colOf`: read wins), cap at 50 per column,
+and have live search. `titleOf`/`snippetOf` give untitled items a headline and drop
+feed boilerplate (a paragraph repeated in 3+ of a feed's items; `bodyOf` never filters
+a body to nothing). Dark-mode accent buttons use dark text for AA. Poller fix live since
+2026-11-08. Next ideas: Home never shows images (every item is type "text"); the 500-item
+API cap makes "All Stories" unread totals disagree with the list.
 
 ## Gotchas
 - DB + images live in the `/data` volume (a host bind-mount on local disk, not NFS — so it is NOT covered by the NAS backup) — schema changes need a migration path, there's real data. `db._migrate()` adds columns in place on `init()`.
