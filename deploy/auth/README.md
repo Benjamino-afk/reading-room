@@ -15,9 +15,10 @@ Single-tenant: everyone who logs in shares the same reader. Sized for one user
 (you) for now; adding more Cognito users gives them the *same* feeds until/unless
 we do the multi-tenant refactor.
 
-**Funnel host:** `ngihome.taild91d92.ts.net` (moved off the NAS 2026-08-22).
-**Tailscale is a native package on ngihome** (not containerised as it was on the
-NAS) — run `tailscale ...` directly; changing serve/funnel needs `sudo`.
+**Funnel host:** `<host>.<tailnet>.ts.net` — referred to below as `FUNNEL_HOST`.
+If Tailscale is a native package on the host, run `tailscale ...` directly
+(changing serve/funnel needs `sudo`); if it is containerised, prefix with
+`docker exec <tailscale-container>`.
 
 ## Prerequisites (Tailscale — one-time)
 1. **Enable HTTPS certificates** for the tailnet — admin console → DNS page →
@@ -26,36 +27,37 @@ NAS) — run `tailscale ...` directly; changing serve/funnel needs `sudo`.
    step 3 — if it isn't enabled, the CLI prints a one-click URL that grants it.
    Or add it manually in the ACL editor (https://login.tailscale.com/admin/acls/file).
    NOTE: `nodeAttrs.target` does NOT accept a bare hostname — use `autogroup:member`
-   (or a tag), not `as5404t-6005-1`:
+   (or a tag), not a machine name:
    ```json
    "nodeAttrs": [{ "target": ["autogroup:member"], "attr": ["funnel"] }]
    ```
 
-## Step 1 — Cognito — DONE (2026-07-01)
-Pool + client + hosted-UI domain + admin user already created via
-`cognito-setup.sh`. Values are in `Documents\AIwork\Secrets\reading-room-cognito.txt`.
-Re-run only if rebuilding from scratch:
+## Step 1 — Cognito
+Create the pool + client + hosted-UI domain + admin user with `cognito-setup.sh`
+(keep the printed values in your secrets store, not in git):
 ```bash
-FUNNEL_HOST=as5404t-6005-1.taild91d92.ts.net ./cognito-setup.sh
+FUNNEL_HOST=<host>.<tailnet>.ts.net ADMIN_EMAIL=you@example.com \
+  DOMAIN_PREFIX=<globally-unique-prefix> ./cognito-setup.sh
 ```
 
-## Step 2 — oauth2-proxy stack (Portainer, on the NAS)
-1. New stack `reading-room-auth`, paste `oauth2-proxy.compose.yml` (POOL_ID,
-   CLIENT_ID and the funnel host are already filled in).
-2. Set stack **env vars** (keeps secrets out of git) — both are in
-   `Documents\AIwork\Secrets\reading-room-cognito.txt`:
+## Step 2 — the Portainer stack
+1. Add a stack from `oauth2-proxy.compose.yml` (Portainer → Add stack → **Upload**).
+2. Set stack **env vars** (keeps host details and secrets out of git):
+   - `FUNNEL_HOST` = `<host>.<tailnet>.ts.net`
+   - `COGNITO_POOL_ID` = e.g. `ap-southeast-2_XXXXXXXXX`
+   - `COGNITO_CLIENT_ID` = the app client id
    - `CLIENT_SECRET` = the Cognito client secret
    - `COOKIE_SECRET` = the 32-byte base64 cookie secret
-3. Deploy. Verify `http://192.168.1.17:4180` on the LAN bounces to a Cognito
+3. Deploy. Verify `http://<host-ip>:4180` on the LAN bounces to a Cognito
    login. Both services share one compose network, so the upstream is the
    service name `http://reading-room:8080` — no host-gateway hop.
 
-## Step 3 — Tailscale Funnel (on the NAS, via the container)
+## Step 3 — Tailscale Funnel
 Tailscale 1.98+ uses the new serve/funnel CLI: one command, target is just the
-local port. Host-network Tailscale means `4180` reaches oauth2-proxy's port:
+local port (Tailscale must be on the host network to reach `4180`):
 ```bash
-docker exec TailScale tailscale funnel --bg 4180
-docker exec TailScale tailscale funnel status   # should show the public https URL
+sudo tailscale funnel --bg 4180
+tailscale funnel status   # should show the public https URL
 ```
 First run may refuse and print a one-click URL to enable Funnel on the tailnet —
 approve it, re-run. `tailscale funnel reset` clears a stale/tailnet-only config.
@@ -66,13 +68,12 @@ login → Reading Room.
 ## Pin the allowed email (who may log in)
 The compose mounts an allow-list file and sets `AUTHENTICATED_EMAILS_FILE`;
 there is deliberately **no `EMAIL_DOMAINS`**, because a `*` there short-circuits
-the allow-list and admits any verified Cognito user. Create the file on ngihome
+the allow-list and admits any verified Cognito user. Create the file on the host
 **before** updating the stack — if the path doesn't exist Docker creates a
-*directory* there and oauth2-proxy exits on boot. `/volume1/tank/config` on
-ngihome is local disk (only `media/` and `photos/` are NFS) and is root-owned:
+*directory* there and oauth2-proxy exits on boot. The config dir is root-owned:
 ```bash
 sudo mkdir -p /volume1/tank/config/reading-room-auth
-echo 'ben.designer.bc@gmail.com' | sudo tee /volume1/tank/config/reading-room-auth/authenticated-emails.txt
+echo 'you@example.com' | sudo tee /volume1/tank/config/reading-room-auth/authenticated-emails.txt
 ```
 One address per line; add a line + restart the container to admit someone else.
 A rejected address gets a 403 *after* a successful Cognito login (expected).
@@ -80,7 +81,7 @@ Locking out the Funnel does not affect `:8087` on the LAN/tailnet.
 
 ## Notes / gotchas
 - Funnel only serves on 443 / 8443 / 10000 — 443 is used here.
-- The `*.ts.net` name is fixed; a custom domain (reading-room.avgchap.com) is the
+- The `*.ts.net` name is fixed; a custom domain is the
   one thing this path can't do — that would need AWS/Cloudflare fronting instead.
 - Reading Room's `:8087` remains directly reachable (unauthed) on LAN/tailnet by
   design; only the public Funnel path is gated.

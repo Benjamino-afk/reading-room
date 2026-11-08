@@ -1,18 +1,19 @@
-# Reading Room + its Cognito login gate — the LIVE stack on ngihome.
+# Reading Room + its Cognito login gate.
 #
 # ONE Portainer stack (project "reading-room") holding both services. This
-# replaces the NAS-era layout, where oauth2-proxy was a separate stack on the
-# default bridge reaching the app via 172.17.0.1:8087. On ngihome they share a
+# replaces an older layout, where oauth2-proxy was a separate stack on the
+# default bridge reaching the app via 172.17.0.1:8087. Here they share a
 # compose network, so the upstream is the service name.
 #
 # Two doors, by design:
 #   :8087  LAN/tailnet only, UNAUTHENTICATED (trusted network)
 #   :4180  the only port Tailscale Funnel publishes — Cognito-gated
 #
-# Secrets (CLIENT_SECRET, COOKIE_SECRET) are Portainer stack env vars, never here.
+# Portainer stack env vars (host details + secrets stay out of git):
+#   FUNNEL_HOST, COGNITO_POOL_ID, COGNITO_CLIENT_ID, CLIENT_SECRET, COOKIE_SECRET
 #
-# Portainer gotcha: upload this file on the Upload tab. Pasting into the web
-# editor corrupts the YAML.
+# Portainer gotcha: create the stack from this file via Add stack -> Upload.
+# Pasting into the web editor can corrupt the YAML.
 services:
   reading-room:
     image: "ghcr.io/benjamino-afk/reading-room:latest"
@@ -44,8 +45,8 @@ services:
       - "/volume1/tank/config/reading-room-auth/authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro"
     environment:
       OAUTH2_PROXY_PROVIDER: "oidc"
-      OAUTH2_PROXY_OIDC_ISSUER_URL: "https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_S4dFr1uaQ"
-      OAUTH2_PROXY_CLIENT_ID: "1cs8rkv7aspv5rs4t8bg1llffb"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "https://cognito-idp.ap-southeast-2.amazonaws.com/${COGNITO_POOL_ID}"
+      OAUTH2_PROXY_CLIENT_ID: "${COGNITO_CLIENT_ID}"
       OAUTH2_PROXY_CLIENT_SECRET: "${CLIENT_SECRET}"
       OAUTH2_PROXY_COOKIE_SECRET: "${COOKIE_SECRET}"
       OAUTH2_PROXY_UPSTREAMS: "http://reading-room:8080"
@@ -56,6 +57,6 @@ services:
       # No EMAIL_DOMAINS: a "*" there short-circuits the allow-list and lets any
       # verified Cognito user in. The mounted file is the only way in.
       OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: "/etc/oauth2-proxy/authenticated-emails.txt"
-      OAUTH2_PROXY_REDIRECT_URL: "https://ngihome.taild91d92.ts.net/oauth2/callback"
-      OAUTH2_PROXY_WHITELIST_DOMAINS: "ngihome.taild91d92.ts.net"
-      OAUTH2_PROXY_COOKIE_DOMAINS: "ngihome.taild91d92.ts.net"
+      OAUTH2_PROXY_REDIRECT_URL: "https://${FUNNEL_HOST}/oauth2/callback"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: "${FUNNEL_HOST}"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "${FUNNEL_HOST}"

@@ -1,25 +1,13 @@
 # Deploy Reading Room
 
-The image is built automatically by GitHub and stored online. ngihome just
-downloads and runs it. Four steps.
+The image is built automatically by GitHub and stored online. Your Docker host
+just downloads and runs it. Four steps.
 
-(Moved off the NAS 2026-08-22 — the host is now ngihome / 192.168.1.17.)
-
-## 1. Let ngihome log in to GitHub (one time only)
-The image is private, so the host needs a read-only token to download it.
-
-**a. Make a token:** open this link (scope is pre-ticked) →
-https://github.com/settings/tokens/new?scopes=read:packages&description=NAS+GHCR
-→ **Generate token** → copy it. (Save it in `Documents\AIwork\Secrets` so you don't lose it.)
-
-**b. Add it to Portainer:** Portainer → **Registries** → **Add registry** → **Custom** →
-- Name: `ghcr`
-- Registry URL: `ghcr.io`
-- Username: `Benjamino-afk`
-- Password: the token from step a
-→ **Add registry**.
-
-You only ever do this once.
+## 1. Registry access
+The GHCR image is **public**, so no login or token is needed to pull it.
+(If you fork this and keep your package private, add a GHCR registry in
+Portainer → **Registries** → **Custom**: URL `ghcr.io`, your GitHub username,
+and a PAT with `read:packages` as the password.)
 
 ## 2. Add the stack in Portainer
 Portainer → **Stacks** → **Add stack** → name it `reading-room`.
@@ -44,9 +32,9 @@ services:
 ```
 
 ## 3. Open it
-- On the LAN: **http://192.168.1.17:8087**
-- Anywhere (Tailscale): **http://ngihome:8087**
-- From the internet: **https://ngihome.taild91d92.ts.net** (Cognito-gated; the
+- On the LAN: **http://<host-ip>:8087**
+- Anywhere (Tailscale): **http://<host>:8087**
+- From the internet: **https://<host>.<tailnet>.ts.net** (Cognito-gated; the
   two ports above are unauthenticated by design and LAN/tailnet only)
 
 ## 4. Add your first feed
@@ -55,7 +43,7 @@ hit **Fetch & add**. Done.
 
 ## Updating later
 When the code changes (a push to `main`), GitHub rebuilds the image. To get the
-new version: ngihome Portainer → the `reading-room` stack → **Update the stack**
+new version: Portainer → the `reading-room` stack → **Update the stack**
 → tick **Re-pull image** → **Update**.
 
 ## Settings (optional)

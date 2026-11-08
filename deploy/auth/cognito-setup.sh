@@ -13,12 +13,12 @@ REGION=ap-southeast-2
 POOL_NAME=reading-room
 # Hosted-UI domain prefix — must be GLOBALLY unique across all of Cognito.
 # Change if creation fails with a conflict.
-DOMAIN_PREFIX=reading-room-rr8087
-ADMIN_EMAIL=ben.designer.bc@gmail.com
+DOMAIN_PREFIX="${DOMAIN_PREFIX:?set DOMAIN_PREFIX to a globally unique hosted-UI prefix}"
+ADMIN_EMAIL="${ADMIN_EMAIL:?set ADMIN_EMAIL to the address that will log in}"
 
 # The public Tailscale Funnel hostname the app is served on. REQUIRED — fill it.
-# e.g. as5404t-6005-1.tailXXXX.ts.net  (from `tailscale status` / admin console)
-FUNNEL_HOST="${FUNNEL_HOST:?set FUNNEL_HOST to the NAS ts.net funnel hostname}"
+# e.g. myhost.tailXXXX.ts.net  (from `tailscale status` / admin console)
+FUNNEL_HOST="${FUNNEL_HOST:?set FUNNEL_HOST to the ts.net funnel hostname}"
 
 echo ">> creating user pool ($POOL_NAME)…"
 POOL_ID=$(aws cognito-idp create-user-pool --region "$REGION" \
