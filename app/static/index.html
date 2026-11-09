@@ -99,6 +99,20 @@ function snippetOf(a) {
   return s === t || (derived && s.startsWith(t.replace(/…$/, ""))) ? "" : s;
 }
 
+// A story's images on a reading surface (Office pane, story view), per the
+// header Images switch. Images are always downloaded; this only changes display.
+// Small = a row of thumbnails, Off = a "show" link; either expands per story.
+function storyImagesHTML(a, fullStyle, ink) {
+  const imgs = a.images || [];
+  if (!imgs.length) return "";
+  const mode = S.showImgs.has(a.id) ? "full" : S.imgMode;
+  if (mode === "full") return imgs.map(src => `<img src="${esc(src)}" alt="" style="${fullStyle}">`).join("");
+  if (mode === "small") return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px;">${
+    imgs.map(src => `<img src="${esc(src)}" alt="" data-act="showImgs" data-id="${a.id}" title="Show full size" style="max-height:160px;max-width:100%;border-radius:6px;cursor:zoom-in;display:block;">`).join("")}</div>`;
+  return `<button data-act="showImgs" data-id="${a.id}" style="display:block;margin:0 0 20px;padding:5px 11px;border:1px dashed ${ink};border-radius:6px;background:transparent;color:${ink};font-size:12.5px;cursor:pointer;">${imgs.length} image${imgs.length > 1 ? "s" : ""} hidden · show</button>`;
+}
+const thumbsOn = () => S.imgMode !== "off";
+
 // Board column: read wins, so reading a story anywhere moves it to Read.
 const colOf = a => a.read ? "done" : (a.status === "doing" ? "doing" : "todo");
 
@@ -131,6 +145,8 @@ const S = {
   layout: (["home","office","board"].includes(_qLayout) ? _qLayout : null)
     || localStorage.getItem("rr-layout") || "home",
   theme: localStorage.getItem("rr-theme") || "light",
+  imgMode: ["full", "small", "off"].includes(localStorage.getItem("rr-images")) ? localStorage.getItem("rr-images") : "full",
+  showImgs: new Set(),   // story ids whose images were expanded despite Small/Off
   accent: localStorage.getItem("rr-accent") || "terracotta",
   filter: "all",
   boardFilter: false,    // board-view feed picker dropdown open?
@@ -251,6 +267,7 @@ function mobileHeaderHTML() {
     <div style="width:24px;height:24px;border-radius:6px;background:var(--accent);box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);flex:0 0 auto;"></div>
     <span style="font-family:'Newsreader',serif;font-size:20px;font-weight:600;color:var(--ink);letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Reading&nbsp;Room</span>
     <button data-act="refresh" title="Sync feeds" style="margin-left:auto;${iconBtn}border:1px solid var(--line);background:var(--card);color:var(--muted);">${S.busy ? "…" : "↻"}</button>
+    <button data-act="imgMode" title="Images: ${S.imgMode} (tap to change)" style="${iconBtn}border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:11px;font-weight:600;">${{full: "Full", small: "Small", off: "Off"}[S.imgMode]}</button>
     <button data-act="theme" title="Toggle theme" style="${iconBtn}border:1px solid var(--line);background:var(--card);color:var(--muted);">${dark ? "☾" : "☀"}</button>
     <button data-act="manager" title="Add feed" style="${iconBtn}border:none;background:var(--accent);color:#fff;font-size:20px;">+</button>
   </div>`;
@@ -282,6 +299,13 @@ function headerHTML() {
       ${S.layoutMenu ? `<div data-act="modalKeep" style="position:absolute;top:41px;left:0;z-index:40;width:152px;background:${h.bg};border:1px solid ${h.line};border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.18);padding:5px;">${menuItem("home")}${menuItem("office")}${menuItem("board")}</div>` : ""}
     </div>
     <button data-act="refresh" title="Poll feeds now" style="${chrome}">${S.busy ? "Syncing…" : "↻ Sync"}</button>
+    <div title="Images (still downloaded when hidden)" style="display:flex;align-items:center;gap:2px;padding:3px;border:1px solid ${h.line};border-radius:9px;background:${h.bg};">
+      <span style="padding:0 6px 0 7px;font-size:12px;color:${h.muted};">Images</span>
+      ${["full", "small", "off"].map(m => {
+        const on = S.imgMode === m;
+        return `<button data-act="imgMode" data-mode="${m}" aria-pressed="${on}" style="padding:4px 9px;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;font-weight:${on ? 600 : 500};background:${on ? h.soft : "transparent"};color:${on ? h.ink : h.muted};">${{full: "Full", small: "Small", off: "Off"}[m]}</button>`;
+      }).join("")}
+    </div>
     <button data-act="theme" style="${chrome}display:flex;align-items:center;gap:7px;"><span style="font-size:14px;">${dark ? "☾" : "☀"}</span>${dark ? "Dark" : "Light"}</button>
     <button data-act="manager" style="padding:8px 15px;border:none;border-radius:9px;background:${h.accent};color:${h.accentInk};font-size:13px;font-weight:600;cursor:pointer;">+ Add feed</button>
   </div>`;
@@ -305,7 +329,9 @@ function homeHTML() {
   const cards = arts.map(a => {
     const dim = a.read ? 0.58 : 1;
     let media = "";
-    if (a.type === "comic") {
+    if (!thumbsOn()) {
+      // images hidden: no comic strip / photo block on the card
+    } else if (a.type === "comic") {
       const imgs = (a.images || []).slice(0, 4);
       if (imgs.length) {
         media = `<div style="display:flex;gap:2px;padding:2px;background:var(--line);">${
@@ -409,8 +435,7 @@ function officeHTML() {
   const paneBtn = "flex:0 0 auto;padding:6px 12px;border:1px solid var(--o-line);border-radius:6px;background:var(--o-pane);cursor:pointer;font-size:12.5px;font-weight:600;color:var(--o-ink);white-space:nowrap;";
   let pane = `<div class="empty" style="color:var(--o-sub);">${S.unreadOnly ? "Nothing unread here." : "Select a story to read it here."}</div>`;
   if (sel) {
-    const media = (sel.images || []).map(s =>
-      `<img src="${esc(s)}" alt="" style="max-width:100%;border-radius:6px;margin:0 0 20px;display:block;">`).join("");
+    const media = storyImagesHTML(sel, "max-width:100%;border-radius:6px;margin:0 0 20px;display:block;", "var(--o-sub)");
     const body = bodyOf(sel).map(t =>
       `<p style="font-size:15px;line-height:1.7;color:var(--o-ink);margin:0 0 16px;overflow-wrap:anywhere;">${esc(t)}</p>`).join("");
     pane = `<div style="flex:1 1 auto;overflow-y:auto;padding:24px 24px 52px;">
@@ -478,7 +503,7 @@ function boardHTML() {
     const img = (a.images || [])[0];
     const snip = snippetOf(a);
     return `<div data-act="story" data-id="${a.id}" style="background:${b["--b-card"]};border:1px solid ${b["--b-cardline"]};border-radius:4px;box-shadow:0 1px 1px ${b["--b-shadow"]};margin-bottom:8px;cursor:pointer;overflow:hidden;" role="button" tabindex="0">
-      ${img && c !== "done" ? `<div style="height:96px;background:#000 center/cover no-repeat url('${esc(img)}');"></div>` : ""}
+      ${img && c !== "done" && thumbsOn() ? `<div style="height:96px;background:#000 center/cover no-repeat url('${esc(img)}');"></div>` : ""}
       <div style="padding:10px 12px 11px;">
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
           <span style="width:7px;height:7px;border-radius:50%;background:${esc(a.feedColor)};flex:0 0 auto;"></span>
@@ -606,8 +631,9 @@ function storyHTML() {
   const mins = Math.max(1, Math.round((a.words || 200) / 230));
   const metaLine = `FULL STORY FETCHED ON YOUR SERVER · NO LINK-OUT · ${esc(metaOf(a).toUpperCase())} · ~${mins} MIN`;
   const paras = bodyOf(a);
-  const imgs = a.images || [];
-  let bodyHTML = "";
+  const inFlow = S.imgMode === "full" || S.showImgs.has(a.id);
+  const imgs = inFlow ? (a.images || []) : [];
+  let bodyHTML = inFlow ? "" : storyImagesHTML(a, "", p.sub);
   paras.forEach((para, i) => {
     bodyHTML += `<p style="font-family:'Newsreader',serif;font-size:19px;line-height:1.72;color:${p.body};margin:0 0 22px;">${esc(para)}</p>`;
     if (i === 1 && imgs[0]) {
@@ -662,7 +688,7 @@ function mobileHTML() {
   const arts = visibleArticles();
   const items = arts.map(a => {
     const img = (a.images || [])[0];
-    const thumb = img
+    const thumb = img && thumbsOn()
       ? `<div style="flex:0 0 84px;width:84px;height:84px;border-radius:10px;background:#000 center/cover no-repeat url('${esc(img)}');"></div>`
       : "";
     return `<article data-act="story" data-id="${a.id}" style="display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line);cursor:pointer;opacity:${a.read ? 0.6 : 1};">
@@ -813,6 +839,13 @@ document.addEventListener("click", async e => {
       S.layout = t.dataset.layout; localStorage.setItem("rr-layout", S.layout); S.layoutMenu = false; render(); break;
     case "layoutMenu":
       S.layoutMenu = !S.layoutMenu; render(); break;
+    case "imgMode": {   // desktop sets a mode; the mobile button cycles
+      const order = ["full", "small", "off"];
+      S.imgMode = t.dataset.mode || order[(order.indexOf(S.imgMode) + 1) % order.length];
+      localStorage.setItem("rr-images", S.imgMode); S.showImgs.clear(); render(); break;
+    }
+    case "showImgs":
+      S.showImgs.add(id); render(); break;
     case "theme":
       S.theme = S.theme === "dark" ? "light" : "dark"; localStorage.setItem("rr-theme", S.theme); render(); break;
     case "filter":
